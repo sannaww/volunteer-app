@@ -1,29 +1,25 @@
 {
-  "name": "backend",
+  "name": "volunteer-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
-    "db:migrate": "npx prisma migrate dev"
+    "start": "node backend/index.js",
+    "dev": "nodemon backend/index.js",
+    "build": "npm install && npx prisma generate",
+    "prisma:generate": "npx prisma generate",
+    "prisma:migrate": "npx prisma migrate deploy",
+    "prisma:studio": "npx prisma studio",
+    "postinstall": "npx prisma generate"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "@prisma/client": "^6.16.2",
-    "bcryptjs": "^3.0.2",
-    "cors": "^2.8.5",
-    "dotenv": "^17.2.2",
     "express": "^4.18.2",
-    "helmet": "^8.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.1",
-    "nodemailer": "^7.0.6"
+    "cors": "^2.8.5",
+    "@prisma/client": "^5.0.0",
+    "prisma": "^5.0.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.0",
+    "nodemailer": "^6.9.4"
   },
-  "devDependencies": {
-    "nodemon": "^3.1.10",
-    "prisma": "^6.16.2"
+  "engines": {
+    "node": ">=18.0.0"
   }
 }

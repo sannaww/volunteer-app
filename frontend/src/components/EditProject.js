@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import './CreateProject.css'; // Используем те же стили
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function EditProject({ user }) {
   const { id } = useParams();
@@ -38,7 +39,7 @@ function EditProject({ user }) {
   const fetchProject = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`http://localhost:3000/api/projects/${id}`, {
+      const response = await axios.get(`${API_URL}/api/projects/${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -147,7 +148,7 @@ function EditProject({ user }) {
 
       console.log('Отправляемые данные для обновления:', dataToSend); // Для отладки
 
-      await axios.put(`http://localhost:3000/api/projects/${id}`, dataToSend, {
+      await axios.put(`${API_URL}/api/projects/${id}`, dataToSend, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

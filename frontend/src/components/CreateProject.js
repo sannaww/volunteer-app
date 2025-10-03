@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './CreateProject.css';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function CreateProject({ user }) {
   const [formData, setFormData] = useState({
@@ -95,7 +96,7 @@ const handleContactInfoChange = (e) => {
 
       console.log('Отправляемые данные:', dataToSend);
 
-      const response = await axios.post('http://localhost:3000/api/projects', dataToSend, {
+      const response = await axios.post('${API_URL}/api/projects', dataToSend, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import './ProjectApplications.css';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function ProjectApplications({ user }) {
   const { projectId } = useParams();
@@ -28,7 +29,7 @@ function ProjectApplications({ user }) {
       console.log('=== ОТЛАДКА ProjectApplications ===');
       console.log('Token из localStorage:', token);
       console.log('Project ID из URL:', projectId);
-      console.log('Полный URL:', `http://localhost:3000/api/projects/${projectId}/applications`);
+      console.log('Полный URL:', `${API_URL}/api/projects/${projectId}/applications`);
       
       if (!token) {
         console.error('❌ Токен не найден в localStorage!');
@@ -39,7 +40,7 @@ function ProjectApplications({ user }) {
       // Получаем заявки
       console.log('🔄 Отправляем запрос на получение заявок...');
       const applicationsResponse = await axios.get(
-        `http://localhost:3000/api/projects/${projectId}/applications`,
+        `${API_URL}/api/projects/${projectId}/applications`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -51,7 +52,7 @@ function ProjectApplications({ user }) {
 
       // Получаем информацию о проекте
       console.log('🔄 Отправляем запрос на получение информации о проекте...');
-      const projectResponse = await axios.get(`http://localhost:3000/api/projects/${projectId}`);
+      const projectResponse = await axios.get(`${API_URL}/api/projects/${projectId}`);
       console.log('✅ Информация о проекте получена:', projectResponse.data);
       setProject(projectResponse.data);
 
@@ -81,7 +82,7 @@ function ProjectApplications({ user }) {
     try {
       const token = localStorage.getItem('token');
       await axios.put(
-        `http://localhost:3000/api/applications/${applicationId}`,
+        `${API_URL}/api/applications/${applicationId}`,
         { status: newStatus },
         {
           headers: {

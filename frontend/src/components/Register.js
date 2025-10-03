@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import './Auth.css';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function Register({ onLogin }) {  // Добавьте пропс onLogin
   const [formData, setFormData] = useState({
@@ -30,7 +31,7 @@ function Register({ onLogin }) {  // Добавьте пропс onLogin
     setLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:3000/api/auth/register', formData);
+      const response = await axios.post('${API_URL}/api/auth/register', formData);
       
       if (response.data.message) {
         setMessage(response.data.message);
@@ -38,7 +39,7 @@ function Register({ onLogin }) {  // Добавьте пропс onLogin
         
         // Автоматически входим после успешной регистрации
         try {
-          const loginResponse = await axios.post('http://localhost:3000/api/auth/login', {
+          const loginResponse = await axios.post('${API_URL}/api/auth/login', {
             email: formData.email,
             password: formData.password
           });

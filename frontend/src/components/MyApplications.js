@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './MyApplications.css';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function MyApplications({ user }) {
   const [applications, setApplications] = useState([]);
@@ -32,7 +33,7 @@ function MyApplications({ user }) {
   const fetchApplications = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:3000/api/my-applications', {
+      const response = await axios.get('${API_URL}/api/my-applications', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -54,7 +55,7 @@ function MyApplications({ user }) {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.delete(`http://localhost:3000/api/applications/${applicationId}`, {
+      const response = await axios.delete(`${API_URL}/api/applications/${applicationId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

@@ -18,7 +18,13 @@ const transporter = nodemailer.createTransport({
 });
 
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:3001',
+    'https://volunteer-app-production-22c8.up.railway.app' // заменим позже
+  ],
+  credentials: true
+}));
 app.use(express.json());
 
 // Тестовый маршрут
@@ -206,23 +212,31 @@ if (contactInfo) {
 
 // Регистрация пользователя
 app.post('/api/auth/register', async (req, res) => {
-  const { email, password, firstName, lastName, role } = req.body;
+  const { email, password, firstName, lastName, role, contactInfo } = req.body;
 
   try {
+    // Проверяем обязательные поля
+    if (!email || !password || !firstName || !lastName) {
+      return res.status(400).json({ error: 'Все обязательные поля должны быть заполнены' });
+    }
+
     // Проверяем, нет ли уже пользователя с таким email
     const existingUser = await prisma.user.findUnique({
       where: { email }
     });
+
+    // Проверка contactInfo (если предоставлена)
     if (contactInfo) {
-  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactInfo);
-  const isPhone = /^\+7\d{10}$/.test(contactInfo.replace(/\s|\(|\)|-/g, ''));
-  
-  if (!isEmail && !isPhone) {
-    return res.status(400).json({
-      error: 'Контактная информация должна быть email (example@mail.com) или телефон в формате +79991234567'
-    });
-  }
-}
+      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactInfo);
+      const isPhone = /^\+7\d{10}$/.test(contactInfo.replace(/\s|\(|\)|-/g, ''));
+      
+      if (!isEmail && !isPhone) {
+        return res.status(400).json({
+          error: 'Контактная информация должна быть email (example@mail.com) или телефон в формате +79991234567'
+        });
+      }
+    }
+
     if (existingUser) {
       return res.status(400).json({ error: 'Пользователь с таким email уже существует' });
     }
@@ -239,7 +253,7 @@ app.post('/api/auth/register', async (req, res) => {
         firstName,
         lastName,
         role: role || 'volunteer',
-        emailVerified: true,  // ← Сразу подтверждаем email
+        emailVerified: true,
         emailVerificationToken: null
       }
     });
@@ -251,7 +265,6 @@ app.post('/api/auth/register', async (req, res) => {
       ...userWithoutPassword,
       message: 'Регистрация успешна! Вы можете войти в свой аккаунт.'
     });
-
   } catch (error) {
     console.error('Ошибка при регистрации:', error);
     res.status(500).json({ error: 'Не удалось зарегистрировать пользователя' });
