@@ -1,0 +1,109 @@
+.project-applications {
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.project-applications h1 {
+  color: #2c3e50;
+  margin-bottom: 1rem;
+}
+
+.project-description {
+  color: #7f8c8d;
+  margin-bottom: 2rem;
+  font-style: italic;
+}
+
+.no-applications {
+  text-align: center;
+  padding: 3rem;
+  color: #7f8c8d;
+}
+
+.applications-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.application-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border-left: 4px solid #3498db;
+}
+
+.application-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.application-header h3 {
+  margin: 0;
+  color: #2c3e50;
+}
+
+.status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: bold;
+}
+
+.status-pending {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.status-approved {
+  background-color: #d1edff;
+  color: #0c5460;
+}
+
+.status-rejected {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.application-details p {
+  margin: 0.5rem 0;
+  color: #34495e;
+}
+
+.application-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.btn-approve {
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.btn-approve:hover {
+  background-color: #219652;
+}
+
+.btn-reject {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.btn-reject:hover {
+  background-color: #c0392b;
+}
