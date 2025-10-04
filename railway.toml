@@ -1,0 +1,9 @@
+[build]
+builder = "nixpacks"
+buildCommand = "cd backend && npm install && npx prisma generate"
+
+[deploy]
+startCommand = "cd backend && npm start"
+
+[build.environment]
+NODE_ENV = "production"

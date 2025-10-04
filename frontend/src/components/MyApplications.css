@@ -1,0 +1,167 @@
+.my-applications {
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.my-applications h1 {
+  color: #2c3e50;
+  margin-bottom: 2rem;
+}
+
+.no-applications {
+  text-align: center;
+  padding: 3rem;
+  color: #7f8c8d;
+}
+
+.browse-projects-link {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background-color: #3498db;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+}
+
+.browse-projects-link:hover {
+  background-color: #2980b9;
+}
+.my-applications {
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.my-applications h1 {
+  color: #2c3e50;
+  margin-bottom: 2rem;
+}
+
+.no-applications {
+  text-align: center;
+  padding: 3rem;
+  color: #7f8c8d;
+}
+
+.browse-projects-link {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background-color: #3498db;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+}
+
+.browse-projects-link:hover {
+  background-color: #2980b9;
+}
+
+.applications-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.application-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border-left: 4px solid #3498db;
+}
+
+.application-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.application-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  flex: 1;
+}
+
+.status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  font-weight: bold;
+  margin-left: 1rem;
+}
+
+.status-pending {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.status-approved {
+  background-color: #d1edff;
+  color: #0c5460;
+}
+
+.status-rejected {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+.application-details p {
+  margin: 0.5rem 0;
+  color: #34495e;
+}
+
+.application-details strong {
+  color: #2c3e50;
+}
+
+.application-actions {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #ecf0f1;
+}
+
+.btn-cancel {
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background-color 0.3s;
+}
+
+.btn-cancel:hover {
+  background-color: #c0392b;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  font-size: 1.2rem;
+  color: #7f8c8d;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .my-applications {
+    padding: 1rem;
+  }
+  
+  .application-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .status {
+    margin-left: 0;
+    margin-top: 0.5rem;
+    align-self: flex-start;
+  }
+}

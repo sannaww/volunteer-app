@@ -1,0 +1,122 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     Int      @id @default(autoincrement())
+  email                  String   @unique
+  password               String
+  firstName              String
+  lastName               String
+  role                   String   @default("volunteer")
+  emailVerified          Boolean  @default(false)
+  emailVerificationToken String?
+  createdAt              DateTime @default(now())
+
+  // Новые поля для личного кабинета
+  phone     String?
+  skills    String?
+  interests String?
+  bio       String?
+  avatarUrl String?
+
+  // Связи
+  projectsCreated Project[]     @relation("ProjectCreator")
+  applications    Application[]
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+
+
+  @@map("users")
+}
+
+model Project {
+  id          Int           @id @default(autoincrement())
+  title       String
+  description String
+  status      ProjectStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+
+  // Новые поля для фильтрации
+  startDate          DateTime?
+  endDate            DateTime?
+  location           String?
+  projectType        ProjectType?
+  volunteersRequired Int          @default(1)
+  contactInfo        String?
+
+  // Связи
+  createdBy    Int
+  creator      User          @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+  applications Application[]
+  messages     Message[]
+
+  @@map("projects")
+}
+
+// Добавим enum для типов проектов
+enum ProjectType {
+  ECOLOGY
+  ANIMAL_WELFARE
+  EDUCATION
+  SOCIAL
+  CULTURAL
+  SPORTS
+  MEDICAL
+  OTHER
+}
+
+model Application {
+  id        Int               @id @default(autoincrement())
+  status    ApplicationStatus @default(PENDING)
+  message   String?
+  createdAt DateTime          @default(now())
+
+  // Связи
+  userId    Int
+  projectId Int
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@map("applications")
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+model Message {
+  id        Int      @id @default(autoincrement())
+  text      String
+  createdAt DateTime @default(now())
+  
+  senderId  Int
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  receiverId Int
+  receiver  User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  projectId Int?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  isRead    Boolean  @default(false)
+
+  @@map("messages")
+}
