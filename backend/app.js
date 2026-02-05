@@ -1,3 +1,4 @@
+const authRoutes = require('./routes/auth.routes');
 const express = require('express');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
@@ -20,6 +21,7 @@ const transporter = nodemailer.createTransport({
 app.use(cors());
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true }));
+app.use('/api/auth', authRoutes);
 
 app.use(cors({
 origin: 'http://localhost:3001',
