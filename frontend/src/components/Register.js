@@ -20,7 +20,7 @@ function Register() {
     e.preventDefault();
     setMessage('');
     try {
-      const response = await axios.post('http://localhost:3000/api/auth/register', formData);      
+      const response = await axios.post('http://localhost:5000/api/auth/register', formData);      
       if (response.data.message) {
         setMessage(response.data.message);
         setIsSuccess(true);      }     

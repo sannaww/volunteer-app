@@ -2,10 +2,10 @@
   "name": "volunteers-backend",
   "version": "1.0.0",
   "description": "Backend for volunteers application",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node index.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "keywords": [],
   "author": "",

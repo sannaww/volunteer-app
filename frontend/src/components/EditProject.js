@@ -38,7 +38,7 @@ function EditProject({ user }) {
   const fetchProject = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`http://localhost:3000/api/projects/${id}`, {
+      const response = await axios.get(`http://localhost:5000/api/projects/${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -85,7 +85,7 @@ function EditProject({ user }) {
         endDate: formData.endDate || null
       };
 
-      await axios.put(`http://localhost:3000/api/projects/${id}`, dataToSend, {
+      await axios.put(`http://localhost:5000/api/projects/${id}`, dataToSend, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'

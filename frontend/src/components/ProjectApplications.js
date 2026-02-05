@@ -28,7 +28,7 @@ function ProjectApplications({ user }) {
       console.log('=== ОТЛАДКА ProjectApplications ===');
       console.log('Token из localStorage:', token);
       console.log('Project ID из URL:', projectId);
-      console.log('Полный URL:', `http://localhost:3000/api/projects/${projectId}/applications`);
+      console.log('Полный URL:', `http://localhost:5000/api/projects/${projectId}/applications`);
       
       if (!token) {
         console.error('❌ Токен не найден в localStorage!');
@@ -39,7 +39,7 @@ function ProjectApplications({ user }) {
       // Получаем заявки
       console.log('🔄 Отправляем запрос на получение заявок...');
       const applicationsResponse = await axios.get(
-        `http://localhost:3000/api/projects/${projectId}/applications`,
+        `http://localhost:5000/api/projects/${projectId}/applications`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -51,7 +51,7 @@ function ProjectApplications({ user }) {
 
       // Получаем информацию о проекте
       console.log('🔄 Отправляем запрос на получение информации о проекте...');
-      const projectResponse = await axios.get(`http://localhost:3000/api/projects/${projectId}`);
+      const projectResponse = await axios.get(`http://localhost:5000/api/projects/${projectId}`);
       console.log('✅ Информация о проекте получена:', projectResponse.data);
       setProject(projectResponse.data);
 
@@ -81,7 +81,7 @@ function ProjectApplications({ user }) {
     try {
       const token = localStorage.getItem('token');
       await axios.put(
-        `http://localhost:3000/api/applications/${applicationId}`,
+        `http://localhost:5000/api/applications/${applicationId}`,
         { status: newStatus },
         {
           headers: {

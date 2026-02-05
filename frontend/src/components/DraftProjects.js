@@ -18,7 +18,7 @@ function DraftProjects({ user }) {
   const fetchDrafts = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:3000/api/projects?status=DRAFT', {
+      const response = await axios.get('http://localhost:5000/api/projects?status=DRAFT', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -35,7 +35,7 @@ function DraftProjects({ user }) {
     try {
       const token = localStorage.getItem('token');
       await axios.put(
-        `http://localhost:3000/api/projects/${projectId}`,
+        `http://localhost:5000/api/projects/${projectId}`,
         { status: 'ACTIVE' },
         {
           headers: {
@@ -64,7 +64,7 @@ function DraftProjects({ user }) {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:3000/api/projects/${projectId}`, {
+      await axios.delete(`http://localhost:5000/api/projects/${projectId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

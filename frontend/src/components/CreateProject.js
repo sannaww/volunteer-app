@@ -95,7 +95,7 @@ const handleContactInfoChange = (e) => {
 
       console.log('Отправляемые данные:', dataToSend);
 
-      const response = await axios.post('http://localhost:3000/api/projects', dataToSend, {
+      const response = await axios.post('http://localhost:5000/api/projects', dataToSend, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
