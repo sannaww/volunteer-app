@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './DraftProjects.css';
 import { useNavigate } from 'react-router-dom';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function DraftProjects({ user }) {
   const [drafts, setDrafts] = useState([]);
@@ -19,7 +18,7 @@ function DraftProjects({ user }) {
   const fetchDrafts = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('${API_URL}/api/projects?status=DRAFT', {
+      const response = await axios.get('http://localhost:3000/api/projects?status=DRAFT', {
         headers: {
           'Authorization': `Bearer ${token}`
         }

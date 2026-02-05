@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './Chat.css';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function Chat({ user }) {
   const [conversations, setConversations] = useState([]);
@@ -74,7 +73,7 @@ function Chat({ user }) {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('${API_URL}/api/messages/conversations', {
+      const response = await axios.get('http://localhost:3000/api/messages/conversations', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       console.log('Загружены диалоги:', response.data);
@@ -92,7 +91,7 @@ function Chat({ user }) {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(
-        `${API_URL}/api/messages/conversation/${activeConversation.user.id}`,
+        `http://localhost:3000/api/messages/conversation/${activeConversation.user.id}`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
@@ -133,7 +132,7 @@ function Chat({ user }) {
       const token = localStorage.getItem('token');
       console.log('Токен:', token ? 'есть' : 'нет');
       
-      const response = await axios.post('${API_URL}/api/messages', {
+      const response = await axios.post('http://localhost:3000/api/messages', {
         receiverId: receiverId,
         text: newMessage.trim()
       }, {
@@ -298,8 +297,5 @@ function Chat({ user }) {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
+    </div>  );}
 export default Chat;

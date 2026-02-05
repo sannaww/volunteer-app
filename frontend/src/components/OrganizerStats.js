@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './OrganizerStats.css';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function OrganizerStats({ user }) {
   const [stats, setStats] = useState(null);
@@ -18,7 +17,7 @@ function OrganizerStats({ user }) {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('${API_URL}/api/organizer/stats', {
+      const response = await axios.get('http://localhost:3000/api/organizer/stats', {
         headers: {
           'Authorization': `Bearer ${token}`
         }

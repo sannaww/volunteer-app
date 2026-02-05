@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import ProjectFilters from './ProjectFilters';
 import './ProjectList.css';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function ProjectList({ user }) {
   const [projects, setProjects] = useState([]);
@@ -43,7 +42,7 @@ function ProjectList({ user }) {
 
     console.log('Параметры запроса:', params.toString()); // Для отладки
 
-    const response = await axios.get(`${API_URL}/api/projects?${params}`);
+    const response = await axios.get(`http://localhost:3000/api/projects?${params}`);
     
     setProjects(response.data);
     setFilteredProjects(response.data);
@@ -82,7 +81,7 @@ function ProjectList({ user }) {
       const message = prompt('Напишите сообщение организатору (необязательно):');
       
       await axios.post(
-        `${API_URL}/api/projects/${projectId}/applications`,
+        `http://localhost:3000/api/projects/${projectId}/applications`,
         { message: message || '' },
         {
           headers: {
@@ -122,7 +121,7 @@ function ProjectList({ user }) {
     console.log('Отправляемые данные:', dataToSend); // Для отладки
 
     const response = await axios.put(
-      `${API_URL}/api/projects/${updatedProject.id}`,
+      `http://localhost:3000/api/projects/${updatedProject.id}`,
       dataToSend,
       {
         headers: {
@@ -158,7 +157,7 @@ function ProjectList({ user }) {
     try {
       const token = localStorage.getItem('token');
       await axios.delete(
-        `${API_URL}/api/projects/${projectToDelete.id}`,
+        `http://localhost:3000/api/projects/${projectToDelete.id}`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -246,7 +245,7 @@ const handleMessageOrganizer = async (project) => {
   else {
     try {
       console.log('Запрашиваем информацию об организаторе с сервера...');
-      const response = await axios.get(`${API_URL}/api/projects/${project.id}/organizer`);
+      const response = await axios.get(`http://localhost:3000/api/projects/${project.id}/organizer`);
       organizerInfo = {
         id: response.data.id,
         firstName: response.data.firstName,

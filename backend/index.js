@@ -17,13 +17,13 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+app.use(cors());
+app.use(express.json()); 
+app.use(express.urlencoded({ extended: true }));
 
 app.use(cors({
-  origin: [
-    'http://localhost:3001',
-    'https://volunteer-app-production-22c8.up.railway.app' // заменим позже
-  ],
-  credentials: true
+origin: 'http://localhost:3001',
+credentials: true
 }));
 app.use(express.json());
 
@@ -243,7 +243,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Хешируем пароль
     const bcrypt = require('bcryptjs');
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 14);
 
     // Создаем пользователя с сразу подтвержденным email
     const user = await prisma.user.create({
@@ -395,12 +395,12 @@ app.get('/api/auth/me', async (req, res) => {
         firstName: true, 
         lastName: true, 
         role: true,
-        phone: true,        // ← Убедитесь, что эти поля есть
-        skills: true,       // ←
-        interests: true,    // ←
-        bio: true,          // ←
-        avatarUrl: true,    // ←
-        createdAt: true     // ←
+        phone: true,        
+        skills: true,       
+        interests: true,    
+        bio: true,          
+        avatarUrl: true,    
+        createdAt: true     
       }
     });
 

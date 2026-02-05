@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import './CreateProject.css';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function CreateProject({ user }) {
   const [formData, setFormData] = useState({
@@ -48,7 +47,7 @@ function CreateProject({ user }) {
 const handleContactInfoChange = (e) => {
   const { value } = e.target;
   
-  // Проверяем, если это похоже на телефон
+  // Проверяем, если это похоже на email
   if (value.includes('@')) {
     // Это email, оставляем как есть
     setFormData(prevState => ({
@@ -96,7 +95,7 @@ const handleContactInfoChange = (e) => {
 
       console.log('Отправляемые данные:', dataToSend);
 
-      const response = await axios.post('${API_URL}/api/projects', dataToSend, {
+      const response = await axios.post('http://localhost:3000/api/projects', dataToSend, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -203,17 +202,17 @@ const handleContactInfoChange = (e) => {
         </div>
 
         <div className="form-group">
-  <label>Контактная информация:*</label>
-  <input
-    type="text"
-    name="contactInfo"
-    value={formData.contactInfo}
-    onChange={handleContactInfoChange}
-    placeholder="Email или телефон (+79991234567)"
-    required
-  />
-  <small>Укажите email или телефон для связи</small>
-</div>
+        <label>Контактная информация:*</label>
+        <input
+          type="text"
+          name="contactInfo"
+          value={formData.contactInfo}
+          onChange={handleContactInfoChange}
+          placeholder="Email или телефон (+79991234567)"
+          required
+        />
+        <small>Укажите email или телефон для связи</small>
+      </div>
 
         <div className="form-group">
           <label>Статус:*</label>

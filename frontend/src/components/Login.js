@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import './Auth.css';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function Login({ onLogin }) {
   const [formData, setFormData] = useState({
@@ -21,7 +20,7 @@ function Login({ onLogin }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('${API_URL}/api/auth/login', formData);
+      const response = await axios.post('http://localhost:3000/api/auth/login', formData);
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       

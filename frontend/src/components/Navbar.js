@@ -1,7 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import './Navbar.css';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function Navbar({ user, onLogout }) {
   return (

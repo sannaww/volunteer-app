@@ -3,7 +3,6 @@ import axios from 'axios';
 import './Profile.css';
 import OrganizerStats from './OrganizerStats';
 import DraftProjects from './DraftProjects';
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
 function Profile({ user }) {
   const [activeTab, setActiveTab] = useState('profile');
@@ -23,7 +22,7 @@ function Profile({ user }) {
         if (!token) return;
 
         // Загружаем актуальные данные пользователя из базы
-        const response = await axios.get('${API_URL}/api/auth/me', {
+        const response = await axios.get('http://localhost:3000/api/auth/me', {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -82,7 +81,7 @@ function Profile({ user }) {
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
-      const response = await axios.get('${API_URL}/api/profile/participation-history', {
+      const response = await axios.get('http://localhost:3000/api/profile/participation-history', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -103,7 +102,7 @@ function Profile({ user }) {
       return;
     }
 
-    const response = await axios.put('${API_URL}/api/profile', {
+    const response = await axios.put('http://localhost:3000/api/profile', {
       firstName: formData.firstName,
       lastName: formData.lastName,
       phone: formData.phone,
@@ -186,7 +185,7 @@ const handleInputChange = (e) => {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete('${API_URL}/api/auth/account', {
+      await axios.delete('http://localhost:3000/api/auth/account', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
