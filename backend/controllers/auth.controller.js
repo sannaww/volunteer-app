@@ -1,19 +1,45 @@
 const authService = require('../services/auth.service');
 
-exports.login = async (req, res) => {
+/**
+ * POST /api/auth/register
+ */
+async function register(req, res) {
   try {
-    const result = await authService.login(req.body);
-    res.json(result);
+    const user = await authService.registerUser(req.body);
+    res.status(201).json(user);
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    res.status(400).json({ message: error.message });
   }
-};
+}
 
-exports.register = async (req, res) => {
+/**
+ * POST /api/auth/login
+ */
+async function login(req, res) {
   try {
-    const result = await authService.register(req.body);
+    const { email, password } = req.body;
+    const result = await authService.loginUser(email, password);
     res.json(result);
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    res.status(401).json({ message: error.message });
   }
+}
+
+/**
+ * GET /api/auth/me
+ */
+async function getMe(req, res) {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    const user = await authService.getMe(token);
+    res.json(user);
+  } catch (error) {
+    res.status(401).json({ message: error.message });
+  }
+}
+
+module.exports = {
+  register,
+  login,
+  getMe
 };
