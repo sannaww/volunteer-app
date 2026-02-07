@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 
 const authRoutes = require('./routes/auth.routes');
+const projectRoutes = require('./routes/projects.routes');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -23,7 +24,7 @@ app.use('/api/auth', authRoutes);
 app.get('/api/test', (req, res) => {
   res.json({ message: 'Сервер работает' });
 });
-
+app.use('/api/projects', projectRoutes);
 /* ================== PROJECTS ================== */
 app.get('/api/projects', async (req, res) => {
   try {
