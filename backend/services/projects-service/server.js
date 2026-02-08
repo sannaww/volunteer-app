@@ -1,14 +1,14 @@
 const express = require('express');
 const cors = require('cors');
-
-const projectRoutes = require('./routes/projects.routes');
+const projectsRoutes = require('./routes/projects.routes');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 
-app.use('/api/projects', projectRoutes);
+// ВАЖНО — без /api/projects
+app.use('/', projectsRoutes);
 
 const PORT = 5002;
 
