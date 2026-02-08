@@ -30,10 +30,18 @@ exports.getProject = async (req, res) => {
 // Создать проект
 exports.createProject = async (req, res) => {
   try {
-    const project = await projectsService.createProject(req.body, req.user);
+    const userIdHeader = req.headers['x-user-id'];
+    const userId = userIdHeader ? parseInt(userIdHeader, 10) : null;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Требуется авторизация (нет x-user-id)' });
+    }
+
+    const project = await projectsService.createProject(req.body, userId);
     res.status(201).json(project);
   } catch (error) {
     console.error('Ошибка создания проекта:', error);
     res.status(500).json({ error: 'Ошибка создания проекта' });
   }
 };
+

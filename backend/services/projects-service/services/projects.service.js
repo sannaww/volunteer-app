@@ -28,13 +28,14 @@ exports.getProjectById = async (id) => {
 };
 
 // Создать проект
-exports.createProject = async (data, user) => {
+exports.createProject = async (data, userId) => {
   return prisma.project.create({
     data: {
       title: data.title,
       description: data.description,
       status: data.status || 'DRAFT',
-      createdBy: user.userId
+      createdBy: userId
     }
   });
 };
+
