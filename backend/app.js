@@ -22,17 +22,22 @@ app.use(
   '/api/auth',
   createProxyMiddleware({
     target: 'http://localhost:5001',
-    changeOrigin: true
+    changeOrigin: true,
+    pathRewrite: {
+      '^/api/auth': '/api/auth'
+    }
   })
 );
 
 // Proxy → Projects Service (5002)
 app.use(
   '/api/projects',
-  authMiddleware,
   createProxyMiddleware({
     target: 'http://localhost:5002',
-    changeOrigin: true
+    changeOrigin: true,
+    pathRewrite: {
+      '^/api/projects': '/api/projects'
+    }
   })
 );
 
