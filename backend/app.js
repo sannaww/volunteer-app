@@ -1,39 +1,37 @@
 const express = require('express');
 const cors = require('cors');
-
-const authRoutes = require('./routes/auth.routes');
-const projectRoutes = require('./routes/projects.routes');
-const applicationRoutes = require('./routes/applications.routes');
-const userRoutes = require('./routes/users.routes');
-const chatRoutes = require('./routes/chat.routes');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 
-// ==================
-// Middleware
-// ==================
 app.use(cors({
-  origin: 'http://localhost:3001',
+  origin: 'http://localhost:3000',
   credentials: true
 }));
 
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use('/api/applications', applicationRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/chat', chatRoutes);
 
-// ==================
-// Routes
-// ==================
-app.use('/api/auth', authRoutes);
-app.use('/api/projects', projectRoutes);
-
-// ==================
-// Test Route
-// ==================
+// Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'API is working 🚀' });
 });
+
+// Proxy → Auth Service (5001)
+app.use(
+  '/api/auth',
+  createProxyMiddleware({
+    target: 'http://localhost:5001',
+    changeOrigin: true
+  })
+);
+
+// Proxy → Projects Service (5002)
+app.use(
+  '/api/projects',
+  createProxyMiddleware({
+    target: 'http://localhost:5002',
+    changeOrigin: true
+  })
+);
 
 module.exports = app;
