@@ -1,17 +1,19 @@
 const jwt = require('jsonwebtoken');
 
-module.exports = function authMiddleware(req, res, next) {
+const JWT_SECRET = 'your-secret-key';
+
+module.exports = (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
 
   if (!token) {
-    return res.status(401).json({ message: 'Токен не предоставлен' });
+    return res.status(401).json({ error: 'Требуется авторизация' });
   }
 
   try {
-    const decoded = jwt.verify(token, 'your-secret-key');
+    const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {
-    return res.status(401).json({ message: 'Недействительный токен' });
+    return res.status(401).json({ error: 'Недействительный токен' });
   }
 };

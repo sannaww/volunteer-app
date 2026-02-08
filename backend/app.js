@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const authMiddleware = require('./middlewares/auth.middleware');
 
 const app = express();
 
@@ -28,10 +29,12 @@ app.use(
 // Proxy → Projects Service (5002)
 app.use(
   '/api/projects',
+  authMiddleware,
   createProxyMiddleware({
     target: 'http://localhost:5002',
     changeOrigin: true
   })
 );
+
 
 module.exports = app;
