@@ -1,7 +1,17 @@
-const app = require('./app');
+const express = require('express');
+const cors = require('cors');
 
-const PORT = process.env.PORT || 5000;
+const projectRoutes = require('./routes/project.routes');
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+
+app.use('/api/projects', projectRoutes);
+
+const PORT = 5002;
 
 app.listen(PORT, () => {
-  console.log(`API Gateway running on port ${PORT}`);
+  console.log(`Projects Service running on port ${PORT}`);
 });
