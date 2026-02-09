@@ -80,15 +80,17 @@ app.use(
   })
 );
 
+// Proxy → Applications Service (5003)
 app.use(
   '/api/applications',
-  requireAuthForWrite, // или отдельный middleware, если хочешь
+  requireAuthForWrite, // проверка токена для POST/PUT/DELETE
   createProxyMiddleware({
     target: 'http://localhost:5003',
     changeOrigin: true,
-    pathRewrite: { '^/api/applications': '' }
+    pathRewrite: { '^/api/applications': '' },
   })
 );
+
 
 
 module.exports = app;
