@@ -75,6 +75,11 @@ async function loginUser(email, password) {
     throw new Error('Пользователь не найден');
   }
 
+  // ✅ ПРОВЕРКА БЛОКИРОВКИ
+  if (user.isBlocked) {
+    throw new Error('Ваш аккаунт заблокирован администратором');
+  }
+
   const isPasswordValid = await bcrypt.compare(password, user.password);
   if (!isPasswordValid) {
     throw new Error('Неверный пароль');
