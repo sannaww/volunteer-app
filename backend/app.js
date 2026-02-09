@@ -50,6 +50,26 @@ function requireAuthForWrite(req, res, next) {
   }
 }
 
+function requireAuthAlways(req, res, next) {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    req.user = decoded;
+
+    // пробрасываем данные дальше
+    req.headers['x-user-id'] = String(decoded.userId);
+    if (decoded.role) req.headers['x-user-role'] = String(decoded.role);
+
+    return next();
+  } catch (e) {
+    return res.status(401).json({ error: 'Недействительный токен' });
+  }
+}
+
+
 // ==================
 // Proxy → Auth Service (5001)
 // ==================
@@ -83,7 +103,7 @@ app.use(
 // Proxy → Applications Service (5003)
 app.use(
   '/api/applications',
-  requireAuthForWrite, // проверка токена для POST/PUT/DELETE
+  requireAuthAlways,
   createProxyMiddleware({
     target: 'http://localhost:5003',
     changeOrigin: true,
