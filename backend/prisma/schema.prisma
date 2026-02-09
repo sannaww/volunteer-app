@@ -6,6 +6,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -19,6 +20,9 @@ model User {
   emailVerificationToken String?
   createdAt              DateTime @default(now())
 
+  // ✅ Новое поле для администратора (блокировка пользователя)
+  isBlocked              Boolean  @default(false)
+
   // Новые поля для личного кабинета
   phone     String?
   skills    String?
@@ -27,11 +31,10 @@ model User {
   avatarUrl String?
 
   // Связи
-  projectsCreated Project[]     @relation("ProjectCreator")
-  applications    Application[]
-  sentMessages     Message[] @relation("SentMessages")
-  receivedMessages Message[] @relation("ReceivedMessages")
-
+  projectsCreated  Project[]     @relation("ProjectCreator")
+  applications     Application[]
+  sentMessages     Message[]     @relation("SentMessages")
+  receivedMessages Message[]     @relation("ReceivedMessages")
 
   @@map("users")
 }
@@ -100,20 +103,21 @@ enum ApplicationStatus {
   APPROVED
   REJECTED
 }
+
 model Message {
   id        Int      @id @default(autoincrement())
   text      String
   createdAt DateTime @default(now())
-  
+
   senderId  Int
   sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  
+
   receiverId Int
-  receiver  User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
-  
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+
   projectId Int?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
+
   isRead    Boolean  @default(false)
 
   @@map("messages")

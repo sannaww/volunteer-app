@@ -137,4 +137,15 @@ app.use(
   })
 );
 
+app.use(
+  '/api/admin',
+  attachAuth,
+  requireRole(['admin']),
+  createProxyMiddleware({
+    target: 'http://localhost:5004',
+    changeOrigin: true,
+    pathRewrite: { '^/api/admin': '' },
+  })
+);
+
 module.exports = app;
