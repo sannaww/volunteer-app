@@ -15,7 +15,8 @@ app.use(cors({
   origin: 'http://localhost:3000',
   credentials: true
 }));
-//app.use(express.json());
+// ВАЖНО: НЕ включаем парсинг body в gateway, иначе proxy может "съесть" тело
+// app.use(express.json());
 
 // ==================
 // Health check
@@ -25,32 +26,9 @@ app.get('/api/health', (req, res) => {
 });
 
 // ==================
-// Auth check (only for write methods)
+// Auth middleware
 // ==================
-function requireAuthForWrite(req, res, next) {
-  const isWrite = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
-  if (!isWrite) return next();
-
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    // сохраним пользователя в req (может пригодиться позже)
-    req.user = decoded;
-
-    // пробросим user info в микросервисы заголовками
-    req.headers['x-user-id'] = String(decoded.userId);
-    if (decoded.role) req.headers['x-user-role'] = String(decoded.role);
-
-    return next();
-  } catch (e) {
-    return res.status(401).json({ error: 'Недействительный токен' });
-  }
-}
-
-function requireAuthAlways(req, res, next) {
+function attachAuth(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
 
@@ -69,12 +47,30 @@ function requireAuthAlways(req, res, next) {
   }
 }
 
+function requireRole(allowedRoles = []) {
+  return (req, res, next) => {
+    const role = req.user?.role || req.headers['x-user-role'];
+
+    if (!role) {
+      return res.status(403).json({ error: 'Роль не определена' });
+    }
+
+    if (!allowedRoles.includes(role)) {
+      return res.status(403).json({ error: 'Недостаточно прав' });
+    }
+
+    return next();
+  };
+}
+
+// helper: считаем write-методами POST/PUT/PATCH/DELETE
+function isWriteMethod(method) {
+  return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
+}
 
 // ==================
 // Proxy → Auth Service (5001)
 // ==================
-// auth-service маршруты: POST /login, POST /register
-// поэтому переписываем: /api/auth/login -> /login
 app.use(
   '/api/auth',
   createProxyMiddleware({
@@ -85,14 +81,20 @@ app.use(
 );
 
 // ==================
-// Proxy → Projects Service (5002)
+// Proxy → Projects Service (5002) + RBAC
 // ==================
-// projects-service маршруты висят на '/':
-// GET /, GET /:id, POST /
-// поэтому переписываем: /api/projects -> /
+// GET — всем
+// POST/PUT/PATCH/DELETE — только organizer/admin
 app.use(
   '/api/projects',
-  requireAuthForWrite,
+  (req, res, next) => {
+    if (!isWriteMethod(req.method)) return next();        // GET без токена
+    return attachAuth(req, res, next);                    // на write нужен токен
+  },
+  (req, res, next) => {
+    if (!isWriteMethod(req.method)) return next();
+    return requireRole(['organizer', 'admin'])(req, res, next);
+  },
   createProxyMiddleware({
     target: 'http://localhost:5002',
     changeOrigin: true,
@@ -100,17 +102,39 @@ app.use(
   })
 );
 
-// Proxy → Applications Service (5003)
+// ==================
+// Proxy → Applications Service (5003) + RBAC
+// ==================
+// Все endpoints требуют токен.
+// POST /:projectId — volunteer/admin
+// GET /project/:projectId — organizer/admin
+// GET /my — любой авторизованный
 app.use(
   '/api/applications',
-  requireAuthAlways,
+  attachAuth,
+  (req, res, next) => {
+    // req.path будет уже без "/api/applications" (но ДО pathRewrite), поэтому тут так:
+    // Пример: /my, /project/2, /2
+    if (req.method === 'GET' && req.path === '/my') {
+      return next(); // любой авторизованный
+    }
+
+    if (req.method === 'GET' && req.path.startsWith('/project/')) {
+      return requireRole(['organizer', 'admin'])(req, res, next);
+    }
+
+    if (req.method === 'POST') {
+      return requireRole(['volunteer', 'admin'])(req, res, next);
+    }
+
+    // на остальные методы/пути пока просто пропускаем (можно ужесточить позже)
+    return next();
+  },
   createProxyMiddleware({
     target: 'http://localhost:5003',
     changeOrigin: true,
     pathRewrite: { '^/api/applications': '' },
   })
 );
-
-
 
 module.exports = app;
