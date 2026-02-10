@@ -93,7 +93,12 @@ app.use(
   createProxyMiddleware({
     target: 'http://localhost:5001',
     changeOrigin: true,
-    pathRewrite: { '^/api/profile': '/profile' },
+    pathRewrite: (path, req) => {
+      // когда запрос приходит на /api/profile, path здесь будет "/"
+      // нам нужно отправить его в auth-service как "/profile"
+      if (path === '/' || path === '') return '/profile';
+      return `/profile${path}`; // на будущее, если будут /api/profile/что-то
+    },
   })
 );
 
