@@ -9,7 +9,13 @@ router.get('/', projectsController.getProjects);
 // Получить проект по ID
 router.get('/:id', projectsController.getProject);
 
-// Создать проект
+// Создать проект (организатор/admin) — проверку сделаем в controller по x-user-role
 router.post('/', projectsController.createProject);
+
+// Обновить проект (организатор-владелец или admin)
+router.put('/:id', projectsController.updateProject);
+
+// Удалить проект (организатор-владелец или admin)
+router.delete('/:id', projectsController.deleteProject);
 
 module.exports = router;
