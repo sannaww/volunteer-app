@@ -1,120 +1,115 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const applicationsService = require('../services/applications.service');
 
-// 📨 Подать заявку на проект
+function getUserFromHeaders(req) {
+  const userId = req.headers['x-user-id'];
+  const role = req.headers['x-user-role'];
+  return {
+    userId: userId ? parseInt(userId, 10) : null,
+    role: role || null,
+  };
+}
+
+// POST /:projectId
 exports.createApplication = async (req, res) => {
   try {
-    const userIdHeader = req.headers['x-user-id'];
-    const userId = userIdHeader ? parseInt(userIdHeader, 10) : null;
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Требуется авторизация (нет x-user-id)' });
-    }
+    const { userId, role } = getUserFromHeaders(req);
+    if (!userId) return res.status(401).json({ error: 'Требуется авторизация' });
+    if (role !== 'volunteer') return res.status(403).json({ error: 'Недостаточно прав' });
 
     const projectId = parseInt(req.params.projectId, 10);
     const { message } = req.body;
 
-    // Проверка: проект существует
-    const project = await prisma.project.findUnique({
-      where: { id: projectId }
-    });
-
-    if (!project) {
-      return res.status(404).json({ error: 'Проект не найден' });
-    }
-
-    // Проверка: нет ли уже заявки
-    const existingApplication = await prisma.application.findFirst({
-      where: {
-        userId,
-        projectId
-      }
-    });
-
-    if (existingApplication) {
-      return res.status(400).json({ error: 'Вы уже подали заявку на этот проект' });
-    }
-
-    const application = await prisma.application.create({
-      data: {
-        userId,
-        projectId,
-        message
-      }
-    });
-
-    res.status(201).json(application);
-  } catch (error) {
-    console.error('Ошибка при создании заявки:', error);
-    res.status(500).json({ error: 'Ошибка при создании заявки' });
+    const app = await applicationsService.createApplication({ userId, projectId, message });
+    res.status(201).json(app);
+  } catch (e) {
+    res.status(400).json({ error: e.message || 'Ошибка подачи заявки' });
   }
 };
 
-// 📄 Получить заявки по проекту (для организатора)
-exports.getProjectApplications = async (req, res) => {
-  try {
-    const userId = parseInt(req.headers['x-user-id'], 10);
-    const projectId = parseInt(req.params.projectId, 10);
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Требуется авторизация' });
-    }
-
-    // Проверяем, что пользователь — создатель проекта
-    const project = await prisma.project.findUnique({
-      where: { id: projectId }
-    });
-
-    if (!project) {
-      return res.status(404).json({ error: 'Проект не найден' });
-    }
-
-    if (project.createdBy !== userId) {
-      return res.status(403).json({ error: 'Нет доступа к заявкам этого проекта' });
-    }
-
-    const applications = await prisma.application.findMany({
-      where: { projectId },
-      include: {
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    });
-
-    res.json(applications);
-  } catch (error) {
-    console.error('Ошибка при получении заявок:', error);
-    res.status(500).json({ error: 'Ошибка при получении заявок' });
-  }
-};
-
-// 👤 Получить мои заявки
+// GET /my
 exports.getMyApplications = async (req, res) => {
   try {
-    const userId = parseInt(req.headers['x-user-id'], 10);
+    const { userId } = getUserFromHeaders(req);
+    if (!userId) return res.status(401).json({ error: 'Требуется авторизация' });
 
-    if (!userId) {
-      return res.status(401).json({ error: 'Требуется авторизация' });
-    }
+    const apps = await applicationsService.getMyApplications(userId);
+    res.json(apps);
+  } catch (e) {
+    res.status(500).json({ error: 'Ошибка при загрузке моих заявок' });
+  }
+};
 
-    const applications = await prisma.application.findMany({
-      where: { userId },
-      include: {
-        project: true
-      },
-      orderBy: { createdAt: 'desc' }
+// GET /project/:projectId
+exports.getProjectApplications = async (req, res) => {
+  try {
+    const { userId, role } = getUserFromHeaders(req);
+    if (!userId) return res.status(401).json({ error: 'Требуется авторизация' });
+    if (role !== 'organizer' && role !== 'admin') return res.status(403).json({ error: 'Недостаточно прав' });
+
+    const projectId = parseInt(req.params.projectId, 10);
+
+    // Organizer может смотреть только заявки на СВОИ проекты
+    const apps = await applicationsService.getProjectApplications({ projectId, requesterId: userId, requesterRole: role });
+    res.json(apps);
+  } catch (e) {
+    res.status(403).json({ error: e.message || 'Нет доступа' });
+  }
+};
+
+// DELETE /:id
+exports.cancelMyApplication = async (req, res) => {
+  try {
+    const { userId, role } = getUserFromHeaders(req);
+    if (!userId) return res.status(401).json({ error: 'Требуется авторизация' });
+    if (role !== 'volunteer') return res.status(403).json({ error: 'Недостаточно прав' });
+
+    const id = parseInt(req.params.id, 10);
+    const result = await applicationsService.cancelMyApplication({ applicationId: id, userId });
+
+    res.json(result);
+  } catch (e) {
+    res.status(400).json({ error: e.message || 'Ошибка отмены заявки' });
+  }
+};
+
+// PATCH /:id/approve
+exports.approveApplication = async (req, res) => {
+  try {
+    const { userId, role } = getUserFromHeaders(req);
+    if (!userId) return res.status(401).json({ error: 'Требуется авторизация' });
+    if (role !== 'organizer' && role !== 'admin') return res.status(403).json({ error: 'Недостаточно прав' });
+
+    const id = parseInt(req.params.id, 10);
+    const updated = await applicationsService.updateStatus({
+      applicationId: id,
+      newStatus: 'APPROVED',
+      requesterId: userId,
+      requesterRole: role,
     });
 
-    res.json(applications);
-  } catch (error) {
-    console.error('Ошибка при получении моих заявок:', error);
-    res.status(500).json({ error: 'Ошибка при получении заявок' });
+    res.json(updated);
+  } catch (e) {
+    res.status(403).json({ error: e.message || 'Ошибка одобрения заявки' });
+  }
+};
+
+// PATCH /:id/reject
+exports.rejectApplication = async (req, res) => {
+  try {
+    const { userId, role } = getUserFromHeaders(req);
+    if (!userId) return res.status(401).json({ error: 'Требуется авторизация' });
+    if (role !== 'organizer' && role !== 'admin') return res.status(403).json({ error: 'Недостаточно прав' });
+
+    const id = parseInt(req.params.id, 10);
+    const updated = await applicationsService.updateStatus({
+      applicationId: id,
+      newStatus: 'REJECTED',
+      requesterId: userId,
+      requesterRole: role,
+    });
+
+    res.json(updated);
+  } catch (e) {
+    res.status(403).json({ error: e.message || 'Ошибка отклонения заявки' });
   }
 };
