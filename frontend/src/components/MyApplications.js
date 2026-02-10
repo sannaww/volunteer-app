@@ -1,21 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/client';
 import './MyApplications.css';
 
 function MyApplications({ user }) {
-
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // Функция для перевода статусов
+
   const getStatusText = (status) => {
     switch (status) {
       case 'PENDING': return '⏳ На рассмотрении';
       case 'APPROVED': return '✅ Одобрена';
       case 'REJECTED': return '❌ Отклонена';
-      default: return status;  
-  } 
-   };
+      default: return status;
+    }
+  };
 
   const getStatusClass = (status) => {
     switch (status) {
@@ -23,108 +21,108 @@ function MyApplications({ user }) {
       case 'APPROVED': return 'status-approved';
       case 'REJECTED': return 'status-rejected';
       default: return '';
-        }
-        };
+    }
+  };
+
   useEffect(() => {
     fetchApplications();
-    }, 
-    []);
-    
+    // eslint-disable-next-line
+  }, []);
+
   const fetchApplications = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/my-applications', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-                }
-                  
-              });
+      setLoading(true);
+      const response = await api.get('/api/applications/my');
       setApplications(response.data);
-      setLoading(false); 
-       } catch (error) {
+    } catch (error) {
       console.error('Ошибка при загрузке заявок:', error);
       alert(error.response?.data?.error || 'Ошибка при загрузке заявок');
-      setLoading(false); 
-       }  };
-  // Функция для отмены заявки
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCancelApplication = async (applicationId) => {
-    if (!window.confirm('Вы уверены, что хотите отменить заявку?')) {
-      return;   
-     }
+    if (!window.confirm('Вы уверены, что хотите отменить заявку?')) return;
+
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.delete(`http://localhost:5000/api/applications/${applicationId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`   
-             }     
-             });
-      // Удаляем заявку из состояния
+      const response = await api.delete(`/api/applications/${applicationId}`);
       setApplications(applications.filter(app => app.id !== applicationId));
-      alert(response.data.message || 'Заявка успешно отменена');  
-      } catch (error) {
+      alert(response.data.message || 'Заявка успешно отменена');
+    } catch (error) {
       console.error('Ошибка при отмене заявки:', error);
-      alert(error.response?.data?.error || 'Ошибка при отмене заявки'); 
-      }  
-    };
+      alert(error.response?.data?.error || 'Ошибка при отмене заявки');
+    }
+  };
+
   if (loading) {
-    return <div className="loading">Загрузка ваших заявок...</div>;  
+    return <div className="loading">Загрузка ваших заявок...</div>;
   }
+
   return (
     <div className="my-applications">
       <h1>Мои заявки</h1>
+
       {applications.length === 0 ? (
         <div className="no-applications">
           <p>У вас пока нет заявок на проекты</p>
           <a href="/" className="browse-projects-link">Найти проекты</a>
-        </div> 
-        
+        </div>
       ) : (
         <div className="applications-list">
           {applications.map(application => (
             <div key={application.id} className="application-card">
               <div className="application-header">
-                <h3>{application.project.title}</h3>
+                <h3>{application.project?.title}</h3>
                 <span className={`status ${getStatusClass(application.status)}`}>
                   {getStatusText(application.status)}
                 </span>
-              </div>              
+              </div>
+
               <div className="application-details">
-                <p><strong>Организатор:</strong> {application.project.creator.firstName} {application.project.creator.lastName}
+                <p>
+                  <strong>Организатор:</strong>{' '}
+                  {application.project?.creator?.firstName} {application.project?.creator?.lastName}
                 </p>
-                <p><strong>Дата проекта:</strong> {application.project.startDate ? new Date(application.project.startDate).toLocaleDateString() : 'Не указана'}
+
+                <p>
+                  <strong>Дата проекта:</strong>{' '}
+                  {application.project?.startDate
+                    ? new Date(application.project.startDate).toLocaleDateString()
+                    : 'Не указана'}
                 </p>
-                <p><strong>Местоположение:</strong> {application.project.location || 'Не указано'}
+
+                <p>
+                  <strong>Местоположение:</strong>{' '}
+                  {application.project?.location || 'Не указано'}
                 </p>
+
                 {application.message && (
-                  <p><strong>Ваше сообщение:</strong> {application.message}
-                  </p>
-                                  )
-                                  }
-                <p><strong>Дата подачи:</strong> {new Date(application.createdAt).toLocaleString()
-                }
+                  <p><strong>Ваше сообщение:</strong> {application.message}</p>
+                )}
+
+                <p>
+                  <strong>Дата подачи:</strong>{' '}
+                  {new Date(application.createdAt).toLocaleString()}
                 </p>
               </div>
 
-              {/* Кнопка отмены заявки - показывается только для заявок со статусом PENDING */}
               {application.status === 'PENDING' && (
                 <div className="application-actions">
-                  <button 
+                  <button
                     className="btn-cancel"
-                    onClick={() => handleCancelApplication(application.id)}  
+                    onClick={() => handleCancelApplication(application.id)}
                   >
                     Отменить заявку
                   </button>
                 </div>
-                           )
-                           }
-            </div>         
-           )
-           )
-           }
-        </div>   
-           )
-        }
-    </div> 
-     );
-    }
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default MyApplications;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../api/client';
 import ProjectFilters from './ProjectFilters';
 import './ProjectList.css';
 
@@ -42,7 +42,7 @@ function ProjectList({ user }) {
 
     console.log('Параметры запроса:', params.toString()); // Для отладки
 
-    const response = await axios.get(`http://localhost:5000/api/projects?${params}`);
+    const response = await api.get(`/api/projects?${params.toString()}`);
     
     setProjects(response.data);
     setFilteredProjects(response.data);
@@ -71,31 +71,24 @@ function ProjectList({ user }) {
   };
 
   const handleApply = async (projectId) => {
-    if (!user) {
-      alert('Для подачи заявки необходимо войти в систему');
-      return;
-    }
+  if (!user) {
+    alert('Для подачи заявки необходимо войти в систему');
+    return;
+  }
 
-    try {
-      const token = localStorage.getItem('token');
-      const message = prompt('Напишите сообщение организатору (необязательно):');
-      
-      await axios.post(
-        `http://localhost:5000/api/projects/${projectId}/applications`,
-        { message: message || '' },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-      
-      alert('Заявка успешно подана!');
-      fetchProjects(); // Обновляем список
-    } catch (error) {
-      alert(error.response?.data?.error || 'Ошибка при подаче заявки');
-    }
-  };
+  try {
+    const message = prompt('Напишите сообщение организатору (необязательно):');
+
+    await api.post(`/api/applications/${projectId}`, {
+      message: message || ''
+    });
+
+    alert('Заявка успешно подана!');
+    fetchProjects();
+  } catch (error) {
+    alert(error.response?.data?.error || 'Ошибка при подаче заявки');
+  }
+};
 
   const handleEdit = (project) => {
     setEditingProject(project);
@@ -120,16 +113,10 @@ function ProjectList({ user }) {
 
     console.log('Отправляемые данные:', dataToSend); // Для отладки
 
-    const response = await axios.put(
-      `http://localhost:5000/api/projects/${updatedProject.id}`,
-      dataToSend,
-      {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
+    const response = await api.put(
+  `/api/projects/${updatedProject.id}`,
+  dataToSend
+);
 
     setEditingProject(null);
     
@@ -156,14 +143,7 @@ function ProjectList({ user }) {
   const handleDeleteConfirm = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(
-        `http://localhost:5000/api/projects/${projectToDelete.id}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
+      await api.delete(`/api/projects/${projectToDelete.id}`);
       
       setShowDeleteModal(false);
       setProjectToDelete(null);

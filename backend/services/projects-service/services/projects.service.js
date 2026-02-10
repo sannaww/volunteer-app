@@ -72,7 +72,7 @@ exports.getAllProjects = async (query = {}) => {
     where,
     include: {
       creator: {
-        select: { firstName: true, lastName: true },
+        select: { id: true, firstName: true, lastName: true, role: true },
       },
       applications: true,
     },
@@ -87,11 +87,14 @@ exports.getProjectById = async (id) => {
   return prisma.project.findUnique({
     where: { id: parseInt(id, 10) },
     include: {
-      creator: true,
+      creator: {
+        select: { id: true, firstName: true, lastName: true, role: true }
+      },
       applications: true
     }
   });
 };
+
 
 exports.createProject = async (data) => {
   return prisma.project.create({
