@@ -137,6 +137,50 @@ async function getMe(token) {
   return user;
 }
 
+exports.updateProfile = async (token, data) => {
+  if (!token) throw new Error('Требуется авторизация');
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, JWT_SECRET);
+  } catch {
+    throw new Error('Недействительный токен');
+  }
+
+  const { firstName, lastName, phone, skills, interests, bio } = data;
+
+  if (!firstName || !lastName) {
+    throw new Error('Имя и фамилия обязательны');
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: decoded.userId },
+    data: {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      phone: phone ? phone.trim() : null,
+      skills: skills ? skills.trim() : null,
+      interests: interests ? interests.trim() : null,
+      bio: bio ? bio.trim() : null,
+    },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      role: true,
+      phone: true,
+      skills: true,
+      interests: true,
+      bio: true,
+      createdAt: true,
+      isBlocked: true,
+    }
+  });
+
+  return updated;
+};
+
 module.exports = {
   registerUser,
   loginUser,

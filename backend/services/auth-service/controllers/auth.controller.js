@@ -38,8 +38,22 @@ async function getMe(req, res) {
   }
 }
 
+/**
+ * PUT /api/auth/profile
+ */
+async function updateProfile(req, res) {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    const updatedUser = await authService.updateProfile(token, req.body);
+    res.json(updatedUser);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+}
+
 module.exports = {
   register,
   login,
-  getMe
+  getMe,
+  updateProfile
 };
