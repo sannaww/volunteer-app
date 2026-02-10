@@ -2,10 +2,9 @@ import axios from "axios";
 
 const api = axios.create({
   baseURL: "http://localhost:5000",
-  withCredentials: true,
+  // withCredentials: true,  // ❌ выключаем, нам не нужны cookies
 });
 
-// Автоматически добавляем токен во все запросы
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
   if (token) {
