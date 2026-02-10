@@ -9,6 +9,7 @@ function Navbar({ user, onLogout }) {
         <div className="navbar-brand">
           <Link to="/">Волонтерские проекты</Link>
         </div>
+
         {user && (
           <div className="user-welcome-nav">
             Привет, {user.firstName}!
@@ -18,15 +19,26 @@ function Navbar({ user, onLogout }) {
 
       <div className="navbar-links">
         <Link to="/">Все проекты</Link>
+
         {user ? (
           <>
+            {/* Только организатор */}
             {user.role === 'organizer' && (
               <Link to="/create-project">Создать проект</Link>
             )}
-            <Link to="/my-applications">Мои заявки</Link>
+
+            {/* Только волонтёр */}
+            {user.role === 'volunteer' && (
+              <Link to="/my-applications">Мои заявки</Link>
+            )}
+
+            {/* Общие */}
             <Link to="/profile">Личный кабинет</Link>
             <Link to="/chat">💬 Сообщения</Link>
-            <button onClick={onLogout} className="logout-btn">Выйти</button>
+
+            <button onClick={onLogout} className="logout-btn">
+              Выйти
+            </button>
           </>
         ) : (
           <>

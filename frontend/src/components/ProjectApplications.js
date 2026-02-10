@@ -7,9 +7,7 @@ function ProjectApplications({ user }) {
   const { projectId } = useParams();
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [project, setProject] = useState(null);
 
-  // Добавляем функцию для перевода статусов
   const getStatusText = (status) => {
     switch (status) {
       case 'PENDING': return '⏳ На рассмотрении';
@@ -20,82 +18,68 @@ function ProjectApplications({ user }) {
   };
 
   useEffect(() => {
-  const fetchData = async () => {
+    fetchApplications();
+  }, [projectId]);
+
+  const fetchApplications = async () => {
     try {
       const token = localStorage.getItem('token');
-      
-      // ДОБАВЛЯЕМ ОТЛАДОЧНУЮ ИНФОРМАЦИЮ
-      console.log('=== ОТЛАДКА ProjectApplications ===');
-      console.log('Token из localStorage:', token);
-      console.log('Project ID из URL:', projectId);
-      console.log('Полный URL:', `http://localhost:5000/api/projects/${projectId}/applications`);
-      
-      if (!token) {
-        console.error('❌ Токен не найден в localStorage!');
-        alert('Требуется авторизация. Пожалуйста, войдите снова.');
-        return;
-      }
 
-      // Получаем заявки
-      console.log('🔄 Отправляем запрос на получение заявок...');
-      const applicationsResponse = await axios.get(
-        `http://localhost:5000/api/projects/${projectId}/applications`,
+      const response = await axios.get(
+        `http://localhost:5000/api/applications/project/${projectId}`,
         {
           headers: {
-            'Authorization': `Bearer ${token}`
+            Authorization: `Bearer ${token}`
           }
         }
       );
-      console.log('✅ Заявки успешно получены:', applicationsResponse.data);
-      setApplications(applicationsResponse.data);
 
-      // Получаем информацию о проекте
-      console.log('🔄 Отправляем запрос на получение информации о проекте...');
-      const projectResponse = await axios.get(`http://localhost:5000/api/projects/${projectId}`);
-      console.log('✅ Информация о проекте получена:', projectResponse.data);
-      setProject(projectResponse.data);
-
+      setApplications(response.data);
       setLoading(false);
-      console.log('=== ОТЛАДКА ЗАВЕРШЕНА ===');
     } catch (error) {
-      console.error('❌ Полная ошибка при загрузке данных:', error);
-      console.error('Детали ошибки:');
-      console.error('- Сообщение:', error.message);
-      console.error('- Код ошибки:', error.code);
-      console.error('- URL запроса:', error.config?.url);
-      console.error('- Метод запроса:', error.config?.method);
-      console.error('- Заголовки:', error.config?.headers);
-      console.error('- Статус ответа:', error.response?.status);
-      console.error('- Данные ответа:', error.response?.data);
-      console.error('- Текст статуса:', error.response?.statusText);
-      
+      console.error('Ошибка при загрузке заявок:', error);
       alert(error.response?.data?.error || 'Ошибка при загрузке заявок');
       setLoading(false);
     }
   };
 
-  fetchData();
-}, [projectId]);
-
-  const handleStatusUpdate = async (applicationId, newStatus) => {
+  const handleApprove = async (applicationId) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(
-        `http://localhost:5000/api/applications/${applicationId}`,
-        { status: newStatus },
+
+      await axios.patch(
+        `http://localhost:5000/api/applications/${applicationId}/approve`,
+        {},
         {
           headers: {
-            'Authorization': `Bearer ${token}`
+            Authorization: `Bearer ${token}`
           }
         }
       );
 
-      // Обновляем список заявок
-      setApplications(applications.map(app => 
-        app.id === applicationId ? { ...app, status: newStatus } : app
-      ));
+      fetchApplications();
     } catch (error) {
-      alert(error.response?.data?.error || 'Ошибка при обновлении статуса');
+      alert(error.response?.data?.error || 'Ошибка при одобрении заявки');
+    }
+  };
+
+  const handleReject = async (applicationId) => {
+    try {
+      const token = localStorage.getItem('token');
+
+      await axios.patch(
+        `http://localhost:5000/api/applications/${applicationId}/reject`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      fetchApplications();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Ошибка при отклонении заявки');
     }
   };
 
@@ -103,52 +87,33 @@ function ProjectApplications({ user }) {
     return <div className="loading">Загрузка заявок...</div>;
   }
 
-  if (!project) {
-    return <div className="error">Проект не найден</div>;
-  }
-
   return (
     <div className="project-applications">
-      <h1>Заявки на проект: {project.title}</h1>
-      <p className="project-description">{project.description}</p>
-      
+      <h1>Заявки на проект</h1>
+
       {applications.length === 0 ? (
-        <div className="no-applications">
-          <p>Пока нет заявок на этот проект</p>
-        </div>
+        <p>Пока нет заявок</p>
       ) : (
         <div className="applications-list">
-          {applications.map(application => (
-            <div key={application.id} className="application-card">
+          {applications.map(app => (
+            <div key={app.id} className="application-card">
               <div className="application-header">
-                <h3>{application.user.firstName} {application.user.lastName}</h3>
-                {/* ЗДЕСЬ ПРОИСХОДИТ ЗАМЕНА - эта строка меняется */}
-                <span className={`status status-${application.status.toLowerCase()}`}>
-                  {getStatusText(application.status)}
+                <h3>{app.user.firstName} {app.user.lastName}</h3>
+                <span className={`status status-${app.status.toLowerCase()}`}>
+                  {getStatusText(app.status)}
                 </span>
               </div>
-              
-              <div className="application-details">
-                <p><strong>Email:</strong> {application.user.email}</p>
-                <p><strong>Роль:</strong> {application.user.role === 'volunteer' ? 'Волонтер' : 'Организатор'}</p>
-                {application.message && (
-                  <p><strong>Сообщение:</strong> {application.message}</p>
-                )}
-                <p><strong>Дата подачи:</strong> {new Date(application.createdAt).toLocaleString()}</p>
-              </div>
 
-              {application.status === 'PENDING' && (
+              <p><strong>Email:</strong> {app.user.email}</p>
+              {app.message && <p><strong>Сообщение:</strong> {app.message}</p>}
+              <p><strong>Дата:</strong> {new Date(app.createdAt).toLocaleString()}</p>
+
+              {app.status === 'PENDING' && (
                 <div className="application-actions">
-                  <button 
-                    className="btn-approve"
-                    onClick={() => handleStatusUpdate(application.id, 'APPROVED')}
-                  >
+                  <button className="btn-approve" onClick={() => handleApprove(app.id)}>
                     Одобрить
                   </button>
-                  <button 
-                    className="btn-reject"
-                    onClick={() => handleStatusUpdate(application.id, 'REJECTED')}
-                  >
+                  <button className="btn-reject" onClick={() => handleReject(app.id)}>
                     Отклонить
                   </button>
                 </div>

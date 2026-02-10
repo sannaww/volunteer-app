@@ -201,67 +201,28 @@ const formatPhoneDisplay = (phone) => {
   
   return phone;
 };
-const handleMessageOrganizer = async (project) => {
+
+const handleMessageOrganizer = (project) => {
   if (!user) {
     alert('Для отправки сообщений необходимо войти в систему');
     return;
   }
-  
-  console.log('Полные данные проекта:', project);
-  
-  let organizerInfo = null;
-  
-  // Вариант 1: используем данные из проекта
-  if (project.creator && project.creator.id) {
-    organizerInfo = {
-      id: project.creator.id,
-      firstName: project.creator.firstName,
-      lastName: project.creator.lastName,
-      role: 'organizer'
-    };
-    console.log('Организатор из данных проекта:', organizerInfo);
-  } 
-  // Вариант 2: запрашиваем с сервера
-  else {
-    try {
-      console.log('Запрашиваем информацию об организаторе с сервера...');
-      const response = await axios.get(`http://localhost:5000/api/projects/${project.id}/organizer`);
-      organizerInfo = {
-        id: response.data.id,
-        firstName: response.data.firstName,
-        lastName: response.data.lastName,
-        role: response.data.role
-      };
-      console.log('Организатор с сервера:', organizerInfo);
-    } catch (error) {
-      console.error('Ошибка при получении организатора:', error);
-      alert('Не удалось получить информацию об организаторе проекта');
-      return;
-    }
-  }
-  
-  if (!organizerInfo) {
-    alert('Информация об организаторе недоступна');
+
+  if (!project.creator?.id) {
+    alert('Не удалось определить организатора проекта');
     return;
   }
-  
-  // Сохраняем в localStorage
+
+  const organizerInfo = {
+    id: project.creator.id,
+    firstName: project.creator.firstName,
+    lastName: project.creator.lastName,
+    role: project.creator.role || 'organizer'
+  };
+
   localStorage.setItem('selectedOrganizer', JSON.stringify(organizerInfo));
-  
-  // Двойная проверка сохранения
-  const saved = localStorage.getItem('selectedOrganizer');
-  console.log('Проверка сохранения в localStorage:', saved);
-  
-  if (!saved) {
-    alert('Ошибка при сохранении данных организатора');
-    return;
-  }
-  
-  // Переходим в чат
-  console.log('Переход в чат...');
   window.location.href = '/chat';
 };
-
 
   if (loading) {
     return <div className="loading">Загрузка проектов...</div>;
