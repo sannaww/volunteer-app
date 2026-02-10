@@ -2,22 +2,86 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 exports.getAllProjects = async (query = {}) => {
-  const { status } = query;
+  const {
+    search,
+    projectType,
+    location,
+    status,
+    dateFrom,
+    dateTo,
+    sortBy = 'createdAt',
+    sortOrder = 'desc',
+  } = query;
 
   const where = {};
-  if (status) where.status = status;
+
+  // 1) Статус
+  if (status) {
+    // поддержка нескольких статусов через запятую
+    if (String(status).includes(',')) {
+      where.status = { in: String(status).split(',') };
+    } else {
+      where.status = status;
+    }
+  } else {
+    // по умолчанию скрываем черновики (для общего списка)
+    where.status = { not: 'DRAFT' };
+  }
+
+  // 2) Поиск по названию/описанию
+  if (search && String(search).trim()) {
+    const s = String(search).trim();
+    where.OR = [
+      { title: { contains: s, mode: 'insensitive' } },
+      { description: { contains: s, mode: 'insensitive' } },
+    ];
+  }
+
+  // 3) Тип проекта
+  if (projectType && String(projectType).trim()) {
+    where.projectType = projectType;
+  }
+
+  // 4) Локация (подстрока)
+  if (location && String(location).trim()) {
+    where.location = { contains: String(location).trim(), mode: 'insensitive' };
+  }
+
+  // 5) Диапазон дат (или проекты без даты)
+  if (dateFrom || dateTo) {
+    where.AND = where.AND || [];
+    where.AND.push({
+      OR: [
+        {
+          startDate: {
+            gte: dateFrom ? new Date(dateFrom) : undefined,
+            lte: dateTo ? new Date(dateTo) : undefined,
+          },
+        },
+        { startDate: null },
+      ],
+    });
+  }
+
+  // 6) Сортировка (защита от неверных полей)
+  const allowedSort = new Set(['createdAt', 'startDate', 'title']);
+  const safeSortBy = allowedSort.has(sortBy) ? sortBy : 'createdAt';
+  const safeSortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
 
   return prisma.project.findMany({
     where,
     include: {
       creator: {
-        select: { firstName: true, lastName: true }
+        select: { firstName: true, lastName: true },
       },
-      applications: true
+      applications: true,
     },
-    orderBy: { createdAt: 'desc' }
+    orderBy: {
+      [safeSortBy]: safeSortOrder,
+    },
   });
 };
+
 
 exports.getProjectById = async (id) => {
   return prisma.project.findUnique({
