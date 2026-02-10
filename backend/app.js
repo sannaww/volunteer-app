@@ -81,6 +81,23 @@ app.use(
 );
 
 // ==================
+// ✅ Proxy → Profile (Auth Service 5001)
+// ==================
+// Нужно для фронта: /api/profile -> /profile
+// Примеры:
+// PUT  http://localhost:5000/api/profile  -> http://localhost:5001/profile
+// GET  http://localhost:5000/api/profile  -> http://localhost:5001/profile (если у тебя реализован)
+app.use(
+  '/api/profile',
+  attachAuth, // профиль всегда требует токен
+  createProxyMiddleware({
+    target: 'http://localhost:5001',
+    changeOrigin: true,
+    pathRewrite: { '^/api/profile': '/profile' },
+  })
+);
+
+// ==================
 // Proxy → Projects Service (5002) + RBAC
 // ==================
 // GET — всем
@@ -137,6 +154,9 @@ app.use(
   })
 );
 
+// ==================
+// Proxy → Admin Service (5004) + RBAC
+// ==================
 app.use(
   '/api/admin',
   attachAuth,
