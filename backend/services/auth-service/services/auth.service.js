@@ -137,7 +137,7 @@ async function getMe(token) {
   return user;
 }
 
-exports.updateProfile = async (token, data) => {
+async function updateProfile(token, data) {
   if (!token) throw new Error('Требуется авторизация');
 
   let decoded;
@@ -175,14 +175,15 @@ exports.updateProfile = async (token, data) => {
       bio: true,
       createdAt: true,
       isBlocked: true,
-    }
+    },
   });
 
   return updated;
-};
+}
 
 module.exports = {
   registerUser,
   loginUser,
-  getMe
+  getMe,
+  updateProfile
 };
