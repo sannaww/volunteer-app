@@ -79,3 +79,58 @@ exports.changeRole = async (req, res) => {
     res.status(500).json({ error: 'Ошибка изменения роли' });
   }
 };
+
+// Получить проекты на модерации (DRAFT)
+exports.getPendingProjects = async (req, res) => {
+  try {
+    const projects = await prisma.project.findMany({
+      where: { status: 'DRAFT' },
+      include: {
+        creator: {
+          select: { id: true, firstName: true, lastName: true, email: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json(projects);
+  } catch (error) {
+    console.error('Admin getPendingProjects error:', error);
+    res.status(500).json({ error: 'Ошибка получения проектов на модерации' });
+  }
+};
+
+// Одобрить проект -> ACTIVE
+exports.approveProject = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+
+    const project = await prisma.project.update({
+      where: { id },
+      data: { status: 'ACTIVE' }
+    });
+
+    res.json({ message: 'Проект одобрен', project });
+  } catch (error) {
+    console.error('Admin approveProject error:', error);
+    res.status(500).json({ error: 'Ошибка одобрения проекта' });
+  }
+};
+
+// Отклонить проект -> CANCELLED (или оставить DRAFT)
+exports.rejectProject = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+
+    const project = await prisma.project.update({
+      where: { id },
+      data: { status: 'CANCELLED' }
+    });
+
+    res.json({ message: 'Проект отклонен', project });
+  } catch (error) {
+    console.error('Admin rejectProject error:', error);
+    res.status(500).json({ error: 'Ошибка отклонения проекта' });
+  }
+};
+
