@@ -23,7 +23,7 @@ function Chat({ user }) {
   useEffect(() => {
     if (activeConversation) {
       fetchMessages();
-      //const interval = setInterval(fetchMessages, 3000);
+      //const interval = setInterval(fetchMessages, 5000);
       //return () => clearInterval(interval);
     }
   }, [activeConversation]);
@@ -73,7 +73,7 @@ function Chat({ user }) {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:3000/api/messages/conversations', {
+      const response = await axios.get('http://localhost:5000/api/messages/conversations', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       console.log('Загружены диалоги:', response.data);
@@ -91,7 +91,7 @@ function Chat({ user }) {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.get(
-        `http://localhost:3000/api/messages/conversation/${activeConversation.user.id}`,
+        `http://localhost:5000/api/messages/conversation/${activeConversation.user.id}`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
@@ -132,7 +132,7 @@ function Chat({ user }) {
       const token = localStorage.getItem('token');
       console.log('Токен:', token ? 'есть' : 'нет');
       
-      const response = await axios.post('http://localhost:3000/api/messages', {
+      const response = await axios.post('http://localhost:5000/api/messages', {
         receiverId: receiverId,
         text: newMessage.trim()
       }, {
