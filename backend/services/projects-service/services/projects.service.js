@@ -53,16 +53,46 @@ exports.createProject = async (data) => {
 exports.updateProject = async (id, data) => {
   const updateData = { ...data };
 
-  // приведение дат
+  // 1) Пустые строки -> null (чтобы Prisma не падала)
+  const toNullIfEmpty = (v) => (v === "" ? null : v);
+
+  if (updateData.title !== undefined) updateData.title = String(updateData.title).trim();
+  if (updateData.description !== undefined) updateData.description = String(updateData.description).trim();
+
+  if (updateData.location !== undefined) updateData.location = toNullIfEmpty(updateData.location);
+  if (updateData.contactInfo !== undefined) updateData.contactInfo = toNullIfEmpty(updateData.contactInfo);
+
+  // 2) projectType: если пусто -> null, иначе оставляем
+  if (updateData.projectType !== undefined) {
+    updateData.projectType = toNullIfEmpty(updateData.projectType);
+  }
+
+  // 3) status: если пусто -> удаляем, чтобы не пытаться записать ""
+  if (updateData.status !== undefined) {
+    if (updateData.status === "" || updateData.status === null) {
+      delete updateData.status;
+    }
+  }
+
+  // 4) Даты: "" -> null, иначе Date
   if (updateData.startDate !== undefined) {
     updateData.startDate = updateData.startDate ? new Date(updateData.startDate) : null;
   }
   if (updateData.endDate !== undefined) {
     updateData.endDate = updateData.endDate ? new Date(updateData.endDate) : null;
   }
+
+  // 5) volunteersRequired: строка -> число, "" -> не трогаем/или null
   if (updateData.volunteersRequired !== undefined) {
-    updateData.volunteersRequired = parseInt(updateData.volunteersRequired, 10) || 1;
+    if (updateData.volunteersRequired === "" || updateData.volunteersRequired === null) {
+      delete updateData.volunteersRequired;
+    } else {
+      updateData.volunteersRequired = parseInt(updateData.volunteersRequired, 10) || 1;
+    }
   }
+
+  // 6) Важно: не даём обновлять createdBy с фронта
+  if (updateData.createdBy !== undefined) delete updateData.createdBy;
 
   return prisma.project.update({
     where: { id: parseInt(id, 10) },
@@ -73,6 +103,7 @@ exports.updateProject = async (id, data) => {
     }
   });
 };
+
 
 exports.deleteProject = async (id) => {
   return prisma.project.delete({
