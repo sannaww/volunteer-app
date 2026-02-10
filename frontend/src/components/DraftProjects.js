@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from "../api/client";
 import './DraftProjects.css';
 import { useNavigate } from 'react-router-dom';
 
@@ -16,40 +16,29 @@ function DraftProjects({ user }) {
   }, [user]);
 
   const fetchDrafts = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/projects?status=DRAFT', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      setDrafts(response.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Ошибка при загрузке черновиков:', error);
-      setLoading(false);
-    }
-  };
+  try {
+    const response = await api.get("/api/projects?status=DRAFT");
+    setDrafts(response.data);
+  } catch (error) {
+    console.error("Ошибка при загрузке черновиков:", error);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handlePublish = async (projectId) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.put(
-        `http://localhost:5000/api/projects/${projectId}`,
-        { status: 'ACTIVE' },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        }
-      );
-      alert('Проект опубликован!');
-      fetchDrafts(); // Обновляем список
-    } catch (error) {
-      console.error('Ошибка при публикации проекта:', error);
-      alert('Ошибка при публикации проекта');
-    }
-  };
+  try {
+    await api.put(
+      `/api/projects/${projectId}`,
+      { status: 'ACTIVE' }
+    );
+    alert('Проект опубликован!');
+    fetchDrafts();
+  } catch (error) {
+    console.error('Ошибка при публикации проекта:', error);
+    alert('Ошибка при публикации проекта');
+  }
+};
 
   const navigate = useNavigate();
   const handleEdit = (project) => {
@@ -58,24 +47,19 @@ function DraftProjects({ user }) {
   };
 
   const handleDelete = async (projectId) => {
-    if (!window.confirm('Вы уверены, что хотите удалить этот черновик?')) {
-      return;
-    }
+  if (!window.confirm('Вы уверены, что хотите удалить этот черновик?')) {
+    return;
+  }
 
-    try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`http://localhost:5000/api/projects/${projectId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      alert('Черновик удален!');
-      fetchDrafts(); // Обновляем список
-    } catch (error) {
-      console.error('Ошибка при удалении черновика:', error);
-      alert('Ошибка при удалении черновика');
-    }
-  };
+  try {
+    await api.delete(`/api/projects/${projectId}`);
+    alert('Черновик удален!');
+    fetchDrafts();
+  } catch (error) {
+    console.error('Ошибка при удалении черновика:', error);
+    alert('Ошибка при удалении черновика');
+  }
+};
 
   // Проверка пользователя после хуков
   if (!user) {

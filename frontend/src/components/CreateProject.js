@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from "../api/client";
 import { useNavigate } from 'react-router-dom';
 import './CreateProject.css';
 
@@ -95,12 +95,10 @@ const handleContactInfoChange = (e) => {
 
       console.log('Отправляемые данные:', dataToSend);
 
-      const response = await axios.post('http://localhost:5000/api/projects', dataToSend, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+const response = await api.post(
+  "/api/projects",
+  dataToSend
+);
 
       alert('Проект успешно создан!');
       navigate('/');
