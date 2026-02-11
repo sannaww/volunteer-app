@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import axios from 'axios';
+import api from "../api/client";
 import { useNavigate } from 'react-router-dom';
 import './Chat.css';
 
@@ -69,43 +69,33 @@ function Chat({ user }) {
   };
 
   const fetchConversations = async () => {
-    if (!user) return;
-    
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://localhost:5000/api/messages/conversations', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      console.log('Загружены диалоги:', response.data);
-      setConversations(response.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Ошибка при загрузке диалогов:', error);
-      setLoading(false);
-    }
-  };
+  if (!user) return;
+  try {
+    const response = await api.get("/api/messages/conversations");
+    setConversations(response.data);
+    setLoading(false);
+  } catch (error) {
+    console.error("Ошибка при загрузке диалогов:", error);
+    setLoading(false);
+  }
+};
 
   const fetchMessages = async () => {
-    if (!user || !activeConversation) return;
-    
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(
-        `http://localhost:5000/api/messages/conversation/${activeConversation.user.id}`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
-      );
-      setMessages(response.data);
-      scrollToBottom();
-    } catch (error) {
-      console.error('Ошибка при загрузке сообщений:', error);
-      // Если это новый диалог и сообщений нет - это нормально
-      if (!activeConversation.isNew) {
-        console.error('Ошибка загрузки существующего диалога');
-      }
+  if (!user || !activeConversation) return;
+
+  try {
+    const response = await api.get(
+      `/api/messages/conversation/${activeConversation.user.id}`
+    );
+    setMessages(response.data);
+    scrollToBottom();
+  } catch (error) {
+    console.error("Ошибка при загрузке сообщений:", error);
+    if (!activeConversation.isNew) {
+      console.error("Ошибка загрузки существующего диалога");
     }
-  };
+  }
+};
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -117,53 +107,38 @@ function Chat({ user }) {
   };
 
   const handleSendMessage = async (e) => {
-    e.preventDefault();
-    console.log('Попытка отправить сообщение...');
-    
-    if (!newMessage.trim() || !user || !activeConversation) {
-      console.log('Нельзя отправить: пустое сообщение или нет активного диалога');
-      return;
-    }
-    
-    const receiverId = activeConversation.user.id;
-    console.log('Отправка сообщения пользователю ID:', receiverId);
+  e.preventDefault();
 
-    try {
-      const token = localStorage.getItem('token');
-      console.log('Токен:', token ? 'есть' : 'нет');
-      
-      const response = await axios.post('http://localhost:5000/api/messages', {
-        receiverId: receiverId,
-        text: newMessage.trim()
-      }, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+  if (!newMessage.trim() || !user || !activeConversation) return;
 
-      console.log('Сообщение отправлено успешно:', response.data);
-      
-      // Добавляем сообщение в список
-      setMessages(prev => [...prev, response.data]);
-      setNewMessage('');
-      
-      // Обновляем список диалогов
-      await fetchConversations();
-      
-      // Убираем флаг нового диалога
-      if (activeConversation.isNew) {
-        setActiveConversation(prev => ({ ...prev, isNew: false }));
-      }
-      
-      scrollToBottom();
-      
-    } catch (error) {
-      console.error('Ошибка при отправке сообщения:', error);
-      console.error('Детали ошибки:', error.response?.data);
-      alert('Не удалось отправить сообщение: ' + (error.response?.data?.error || error.message));
+  const receiverId = activeConversation.user.id;
+
+  try {
+    const response = await api.post("/api/messages/send", {
+      receiverId,
+      text: newMessage.trim(),
+    });
+
+    setMessages((prev) => [...prev, response.data]);
+    setNewMessage("");
+
+    await fetchConversations();
+
+    if (activeConversation.isNew) {
+      setActiveConversation((prev) => ({ ...prev, isNew: false }));
     }
-  };
+
+    scrollToBottom();
+  } catch (error) {
+    console.error("Ошибка при отправке сообщения:", error);
+    alert(
+      "Не удалось отправить сообщение: " +
+        (error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message)
+    );
+  }
+};
 
   const formatTime = (dateString) => {
     return new Date(dateString).toLocaleTimeString('ru-RU', {

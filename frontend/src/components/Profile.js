@@ -102,7 +102,6 @@ function Profile({ user, onUserUpdate }) {
     if (user && activeTab === 'history') {
       fetchParticipationHistory();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, user]);
 
   const fetchParticipationHistory = async () => {
@@ -346,48 +345,53 @@ function Profile({ user, onUserUpdate }) {
         <h1>Личный кабинет</h1>
       </div>
 
-      <div className="profile-tabs-container">
-        <div className="profile-tabs">
-          <button
-            className={`tab ${activeTab === 'profile' ? 'active' : ''}`}
-            onClick={() => setActiveTab('profile')}
-          >
-            📝 Профиль
-          </button>
+      <div className="profile-tabs">
+  <button
+    className={`tab ${activeTab === 'profile' ? 'active' : ''}`}
+    onClick={() => setActiveTab('profile')}
+  >
+    📝 Профиль
+  </button>
 
-          <button
-            className={`tab ${activeTab === 'history' ? 'active' : ''}`}
-            onClick={() => setActiveTab('history')}
-          >
-            📊 История участия
-          </button>
+  {/* Volunteer: история участия */}
+  {user?.role === 'volunteer' && (
+    <button
+      className={`tab ${activeTab === 'history' ? 'active' : ''}`}
+      onClick={() => setActiveTab('history')}
+    >
+      📊 История участия
+    </button>
+  )}
 
-          <button
-            className={`tab ${activeTab === 'applications' ? 'active' : ''}`}
-            onClick={() => setActiveTab('applications')}
-          >
-            📨 Мои заявки
-          </button>
+  {/* Organizer: статистика + черновики */}
+  {user?.role === 'organizer' && (
+    <>
+      <button
+        className={`tab ${activeTab === 'stats' ? 'active' : ''}`}
+        onClick={() => setActiveTab('stats')}
+      >
+        📊 Статистика
+      </button>
 
-          {user && user.role === 'organizer' && (
-            <button
-              className={`tab ${activeTab === 'stats' ? 'active' : ''}`}
-              onClick={() => setActiveTab('stats')}
-            >
-              📊 Статистика
-            </button>
-          )}
+      <button
+        className={`tab ${activeTab === 'drafts' ? 'active' : ''}`}
+        onClick={() => setActiveTab('drafts')}
+      >
+        📋 Черновики
+      </button>
+    </>
+  )}
 
-          {user && user.role === 'organizer' && (
-            <button
-              className={`tab ${activeTab === 'drafts' ? 'active' : ''}`}
-              onClick={() => setActiveTab('drafts')}
-            >
-              📋 Черновики
-            </button>
-          )}
-        </div>
-      </div>
+  {/* Admin: позже добавим админ-панель */}
+  {user?.role === 'admin' && (
+    <button
+      className={`tab ${activeTab === 'admin' ? 'active' : ''}`}
+      onClick={() => setActiveTab('admin')}
+    >
+      🛡️ Админ-панель
+    </button>
+  )}
+</div>
 
       <div className="profile-content">
         {activeTab === 'profile' && (
@@ -626,27 +630,24 @@ function Profile({ user, onUserUpdate }) {
           </div>
         )}
 
-        {activeTab === 'applications' && (
-          <div className="profile-section">
-            <h2>Мои заявки</h2>
-            <p>Для просмотра и управления вашими заявками перейдите в раздел "Мои заявки".</p>
-            <button className="btn btn-primary" onClick={() => (window.location.href = '/my-applications')}>
-              📨 Перейти к моим заявкам
-            </button>
-          </div>
-        )}
+        {activeTab === 'stats' && user?.role === 'organizer' && (
+  <div className="profile-section">
+    <OrganizerStats user={user} />
+  </div>
+)}
 
-        {activeTab === 'stats' && (
-          <div className="profile-section">
-            <OrganizerStats user={user} />
-          </div>
-        )}
-
-        {activeTab === 'drafts' && (
-          <div className="profile-section">
-            <DraftProjects user={user} />
-          </div>
-        )}
+{activeTab === 'drafts' && user?.role === 'organizer' && (
+  <div className="profile-section">
+    <DraftProjects user={user} />
+  </div>
+)}
+        
+        {activeTab === 'admin' && (
+  <div className="profile-section">
+    <h2>Админ-панель</h2>
+    <p>Здесь будет модерация проектов, управление пользователями и роли.</p>
+  </div>
+)}
       </div>
     </div>
   );

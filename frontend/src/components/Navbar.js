@@ -21,31 +21,32 @@ function Navbar({ user, onLogout }) {
         <Link to="/">Все проекты</Link>
 
         {user ? (
-          <>
-            {/* Только организатор */}
-            {user.role === 'organizer' && (
-              <Link to="/create-project">Создать проект</Link>
-            )}
+  <>
+    {/* organizer */}
+    {user.role === 'organizer' && (
+      <Link to="/create-project">Создать проект</Link>
+    )}
 
-            {/* Только волонтёр */}
-            {user.role === 'volunteer' && (
-              <Link to="/my-applications">Мои заявки</Link>
-            )}
+    {/* volunteer */}
+    {user.role === 'volunteer' && (
+      <Link to="/my-applications">Мои заявки</Link>
+    )}
 
-            {/* Общие */}
-            <Link to="/profile">Личный кабинет</Link>
-            <Link to="/chat">💬 Сообщения</Link>
+    {/* admin - пока без отдельных пунктов */}
+    <Link to="/profile">Личный кабинет</Link>
+    <Link to="/chat">💬 Сообщения</Link>
 
-            <button onClick={onLogout} className="logout-btn">
-              Выйти
-            </button>
-          </>
-        ) : (
-          <>
-            <Link to="/login">Войти</Link>
-            <Link to="/register">Регистрация</Link>
-          </>
-        )}
+    <button onClick={onLogout} className="logout-btn">
+      Выйти
+    </button>
+  </>
+) : (
+  <>
+    <Link to="/">Все проекты</Link>
+    <Link to="/login">Войти</Link>
+    <Link to="/register">Регистрация</Link>
+  </>
+)}
       </div>
     </nav>
   );
