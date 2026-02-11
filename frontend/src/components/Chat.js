@@ -114,10 +114,10 @@ function Chat({ user }) {
   const receiverId = activeConversation.user.id;
 
   try {
-    const response = await api.post("/api/messages/send", {
-      receiverId,
-      text: newMessage.trim(),
-    });
+    const response = await api.post('/api/messages', {
+  receiverId,
+  text: newMessage.trim()
+})
 
     setMessages((prev) => [...prev, response.data]);
     setNewMessage("");

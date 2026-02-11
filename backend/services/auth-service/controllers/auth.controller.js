@@ -1,8 +1,6 @@
 const authService = require('../services/auth.service');
 
-/**
- * POST /api/auth/register
- */
+/**POST /api/auth/register*/
 async function register(req, res) {
   try {
     const user = await authService.registerUser(req.body);
@@ -12,9 +10,7 @@ async function register(req, res) {
   }
 }
 
-/**
- * POST /api/auth/login
- */
+/**POST /api/auth/login*/
 async function login(req, res) {
   try {
     const { email, password } = req.body;
@@ -25,9 +21,7 @@ async function login(req, res) {
   }
 }
 
-/**
- * GET /api/auth/me
- */
+/**GET /api/auth/me*/
 async function getMe(req, res) {
   try {
     const token = req.headers.authorization?.split(' ')[1];
@@ -38,9 +32,7 @@ async function getMe(req, res) {
   }
 }
 
-/**
- * PUT /api/auth/profile
- */
+/** PUT /profile*/
 async function updateProfile(req, res) {
   try {
     const token = req.headers.authorization?.split(' ')[1];
@@ -51,9 +43,30 @@ async function updateProfile(req, res) {
   }
 }
 
+/**GET /api/auth/users/:id  Используется другими сервисами (чат)*/
+async function getUserById(req, res) {
+  try {
+    const userId = Number(req.params.id);
+    if (!userId) {
+      return res.status(400).json({ message: 'Некорректный id пользователя' });
+    }
+
+    const user = await authService.getUserById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'Пользователь не найден' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
 module.exports = {
   register,
   login,
   getMe,
-  updateProfile
+  updateProfile,
+  getUserById
 };

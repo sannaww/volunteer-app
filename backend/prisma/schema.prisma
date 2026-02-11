@@ -21,7 +21,7 @@ model User {
   createdAt              DateTime @default(now())
 
   // ✅ Новое поле для администратора (блокировка пользователя)
-  isBlocked              Boolean  @default(false)
+  isBlocked Boolean @default(false)
 
   // Новые поля для личного кабинета
   phone     String?
@@ -31,10 +31,8 @@ model User {
   avatarUrl String?
 
   // Связи
-  projectsCreated  Project[]     @relation("ProjectCreator")
-  applications     Application[]
-  sentMessages     Message[]     @relation("SentMessages")
-  receivedMessages Message[]     @relation("ReceivedMessages")
+  projectsCreated Project[]     @relation("ProjectCreator")
+  applications    Application[]
 
   @@map("users")
 }
@@ -58,7 +56,6 @@ model Project {
   createdBy    Int
   creator      User          @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: Cascade)
   applications Application[]
-  messages     Message[]
 
   @@map("projects")
 }
@@ -105,20 +102,13 @@ enum ApplicationStatus {
 }
 
 model Message {
-  id        Int      @id @default(autoincrement())
-  text      String
-  createdAt DateTime @default(now())
-
-  senderId  Int
-  sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-
+  id         Int      @id @default(autoincrement())
+  senderId   Int
   receiverId Int
-  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  text       String
+  createdAt  DateTime @default(now())
 
-  projectId Int?
-  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  isRead    Boolean  @default(false)
-
-  @@map("messages")
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
 }

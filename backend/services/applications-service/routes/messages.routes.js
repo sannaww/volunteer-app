@@ -1,80 +1,98 @@
 const express = require('express');
 const router = express.Router();
+const prisma = require('../prismaClient');
 
-// ⚠️ ВРЕМЕННОЕ хранилище в памяти (для проверки маршрутов)
-// После проверки мы перенесём в Prisma/PostgreSQL.
-let messages = [];
-let idSeq = 1;
+// Вспомогательно: безопасное имя роли для UI
+function normalizeRole(role) {
+  if (!role) return 'unknown';
+  return String(role).toLowerCase();
+}
 
 // GET /messages/conversations
-router.get('/conversations', (req, res) => {
+router.get('/conversations', async (req, res) => {
   const userId = Number(req.headers['x-user-id']);
   if (!userId) return res.status(401).json({ message: 'No x-user-id header' });
 
-  // Последние сообщения по каждому собеседнику
-  const lastByPartner = new Map();
+  // Берём последние сообщения пользователя (sender/receiver)
+  // и на их основе строим список диалогов.
+  const lastMessages = await prisma.message.findMany({
+    where: {
+      OR: [{ senderId: userId }, { receiverId: userId }],
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 200,
+  });
 
-  const relevant = messages
-    .filter(m => m.senderId === userId || m.receiverId === userId)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const map = new Map();
 
-  for (const m of relevant) {
+  for (const m of lastMessages) {
     const partnerId = m.senderId === userId ? m.receiverId : m.senderId;
-    if (!lastByPartner.has(partnerId)) {
-      lastByPartner.set(partnerId, {
+
+    if (!map.has(partnerId)) {
+      map.set(partnerId, {
         user: {
           id: partnerId,
-          // временно: фронт пусть переживёт отсутствие ФИО
-          firstName: 'User',
-          lastName: `#${partnerId}`,
-          role: 'unknown'
+          // Имя/роль подтянем позже (Часть B)
+          firstName: null,
+          lastName: null,
+          role: 'unknown',
         },
-        lastMessage: { text: m.text, createdAt: m.createdAt },
-        unreadCount: 0
+        lastMessage: {
+          text: m.text,
+          createdAt: m.createdAt,
+        },
+        unreadCount: 0,
       });
     }
   }
 
-  res.json(Array.from(lastByPartner.values()));
+  res.json(Array.from(map.values()));
 });
 
 // GET /messages/conversation/:partnerId
-router.get('/conversation/:partnerId', (req, res) => {
+router.get('/conversation/:partnerId', async (req, res) => {
   const userId = Number(req.headers['x-user-id']);
   const partnerId = Number(req.params.partnerId);
   if (!userId) return res.status(401).json({ message: 'No x-user-id header' });
 
-  const convo = messages
-    .filter(m =>
-      (m.senderId === userId && m.receiverId === partnerId) ||
-      (m.senderId === partnerId && m.receiverId === userId)
-    )
-    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const msgs = await prisma.message.findMany({
+    where: {
+      OR: [
+        { senderId: userId, receiverId: partnerId },
+        { senderId: partnerId, receiverId: userId },
+      ],
+    },
+    orderBy: { createdAt: 'asc' },
+  });
 
-  res.json(convo);
+  res.json(msgs);
 });
 
 // POST /messages
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const senderId = Number(req.headers['x-user-id']);
+  const senderRole = normalizeRole(req.headers['x-user-role']);
   if (!senderId) return res.status(401).json({ message: 'No x-user-id header' });
 
   const { receiverId, text } = req.body;
 
-  if (!receiverId || !text || !text.trim()) {
+  if (!receiverId || !text?.trim()) {
     return res.status(400).json({ message: 'receiverId и text обязательны' });
   }
 
-  const msg = {
-    id: idSeq++,
-    senderId,
-    receiverId: Number(receiverId),
-    text: text.trim(),
-    createdAt: new Date().toISOString()
-  };
+  const msg = await prisma.message.create({
+    data: {
+      senderId,
+      receiverId: Number(receiverId),
+      text: text.trim(),
+    },
+  });
 
-  messages.push(msg);
-  res.status(201).json(msg);
+  // В ответ можно вернуть role отправителя, чтобы UI мог красиво отрисовать (не обязательно)
+  res.status(201).json({
+    ...msg,
+    senderRole,
+  });
 });
 
 module.exports = router;

@@ -8,9 +8,7 @@ const app = express();
 // Пока оставляем как у тебя в сервисах (позже вынесем в .env)
 const JWT_SECRET = 'your-secret-key';
 
-// ==================
 // Global middleware
-// ==================
 app.use(cors({
   origin: 'http://localhost:3000',
   credentials: true
@@ -18,16 +16,12 @@ app.use(cors({
 // ВАЖНО: НЕ включаем парсинг body в gateway, иначе proxy может "съесть" тело
 // app.use(express.json());
 
-// ==================
 // Health check
-// ==================
 app.get('/api/health', (req, res) => {
   res.json({ status: 'API is working 🚀' });
 });
 
-// ==================
 // Auth middleware
-// ==================
 function attachAuth(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'Требуется авторизация' });
@@ -68,9 +62,7 @@ function isWriteMethod(method) {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
 }
 
-// ==================
 // Proxy → Auth Service (5001)
-// ==================
 app.use(
   '/api/auth',
   createProxyMiddleware({
@@ -80,13 +72,7 @@ app.use(
   })
 );
 
-// ==================
 // ✅ Proxy → Profile (Auth Service 5001)
-// ==================
-// Нужно для фронта: /api/profile -> /profile
-// Примеры:
-// PUT  http://localhost:5000/api/profile  -> http://localhost:5001/profile
-// GET  http://localhost:5000/api/profile  -> http://localhost:5001/profile (если у тебя реализован)
 app.use(
   '/api/profile',
   attachAuth, // профиль всегда требует токен
@@ -95,16 +81,14 @@ app.use(
     changeOrigin: true,
     pathRewrite: (path, req) => {
       // когда запрос приходит на /api/profile, path здесь будет "/"
-      // нам нужно отправить его в auth-service как "/profile"
+      // нужно отправить его в auth-service как "/profile"
       if (path === '/' || path === '') return '/profile';
       return `/profile${path}`; // на будущее, если будут /api/profile/что-то
     },
   })
 );
 
-// ==================
 // Proxy → Projects Service (5002) + RBAC
-// ==================
 // GET — всем
 // POST/PUT/PATCH/DELETE — только organizer/admin
 app.use(
@@ -124,13 +108,8 @@ app.use(
   })
 );
 
-// ==================
 // Proxy → Applications Service (5003) + RBAC
-// ==================
 // Все endpoints требуют токен.
-// POST /:projectId — volunteer/admin
-// GET /project/:projectId — organizer/admin
-// GET /my — любой авторизованный
 app.use(
   '/api/applications',
   attachAuth,
@@ -159,9 +138,7 @@ app.use(
   })
 );
 
-// ==================
 // Proxy → Admin Service (5004) + RBAC
-// ==================
 app.use(
   '/api/admin',
   attachAuth,
@@ -170,6 +147,20 @@ app.use(
     target: 'http://localhost:5004',
     changeOrigin: true,
     pathRewrite: { '^/api/admin': '' },
+  })
+);
+
+// Proxy → Messages (пока внутри applications-service 5003)
+app.use(
+  '/api/messages',
+  attachAuth,
+  createProxyMiddleware({
+    target: 'http://localhost:5003',
+    changeOrigin: true,
+    pathRewrite: (path, req) => {
+      // path здесь будет "/conversations", "/conversation/5", "/" и т.п.
+      return `/messages${path}`;
+    },
   })
 );
 

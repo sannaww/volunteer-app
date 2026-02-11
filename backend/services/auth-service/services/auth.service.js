@@ -181,9 +181,23 @@ async function updateProfile(token, data) {
   return updated;
 }
 
+async function getUserById(userId) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      role: true
+    }
+  });
+}
+
 module.exports = {
   registerUser,
   loginUser,
   getMe,
-  updateProfile
+  updateProfile,
+  getUserById
 };
+
