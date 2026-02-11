@@ -66,6 +66,12 @@ function App() {
     setUser(null);
   };
 
+  const handleUserUpdate = (updatedUser) => {
+  setUser(updatedUser);
+  localStorage.setItem('user', JSON.stringify(updatedUser));
+};
+<Route path="/profile" element={<Profile user={user} onUserUpdate={handleUserUpdate} />} />
+
   if (appLoading) return <div className="app-loading">Загрузка приложения...</div>;
 
   return (
