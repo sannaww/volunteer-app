@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/client';
 import ProjectFilters from './ProjectFilters';
 import './ProjectList.css';
+import { getFavorites, addFavorite, removeFavorite } from "../api/favorites";
 
 function ProjectList({ user }) {
   const [projects, setProjects] = useState([]);
@@ -17,6 +18,8 @@ function ProjectList({ user }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
   const [editingProject, setEditingProject] = useState(null);
+  const [favoriteIds, setFavoriteIds] = useState(new Set());
+  const [toast, setToast] = useState("");
 
   useEffect(() => {
     fetchProjects();
@@ -25,7 +28,56 @@ function ProjectList({ user }) {
     // const interval = setInterval(fetchProjects, 30000);
     
     // return () => clearInterval(interval);
+    // Загружаем избранное только если волонтёр залогинен
+  if (user && user.role === "volunteer") {
+    loadFavorites();
+  }
   }, []);
+
+  const loadFavorites = async () => {
+  try {
+    const favs = await getFavorites();
+    setFavoriteIds(new Set(favs.map(f => f.projectId)));
+  } catch (e) {
+    console.error("Ошибка загрузки избранного:", e);
+  }
+};
+
+const showToast = (text) => {
+  setToast(text);
+  setTimeout(() => setToast(""), 2000);
+};
+
+const toggleFavorite = async (projectId) => {
+  if (!user) {
+    alert("Нужно войти в систему");
+    return;
+  }
+
+  try {
+    const isFav = favoriteIds.has(projectId);
+
+    if (isFav) {
+      await removeFavorite(projectId);
+      setFavoriteIds(prev => {
+        const next = new Set(prev);
+        next.delete(projectId);
+        return next;
+      });
+      showToast("Удалено из избранного");
+    } else {
+      await addFavorite(projectId);
+      setFavoriteIds(prev => {
+        const next = new Set(prev);
+        next.add(projectId);
+        return next;
+      });
+      showToast("Добавлено в избранное");
+    }
+  } catch (e) {
+    alert(e?.response?.data?.message || "Ошибка при работе с избранным");
+  }
+};
 
   const fetchProjects = async (currentFilters = filters) => {
   try {
@@ -251,6 +303,12 @@ const handleMessageOrganizer = (project) => {
         Найдено проектов: {filteredProjects.length}
       </div>
       
+      {toast && (
+  <div style={{ margin: "10px 0", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}>
+    {toast}
+  </div>
+)}
+
       <div className="projects-grid">
         {filteredProjects.map(project => (
           <div key={project.id} className="project-card">
@@ -315,6 +373,19 @@ const handleMessageOrganizer = (project) => {
     <>
       {project.status === 'ACTIVE' ? (
         <>
+          <button
+  className="btn"
+  onClick={() => toggleFavorite(project.id)}
+  style={{
+    border: "1px solid #ccc",
+    background: "white",
+    fontSize: 18
+  }}
+  title="В избранное"
+>
+  {favoriteIds.has(project.id) ? "❤️" : "🤍"}
+</button>
+
           {/* Кнопка подачи заявки */}
           <button
             className="btn btn-primary"

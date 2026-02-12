@@ -29,10 +29,21 @@ function Navbar({ user, onLogout }) {
 
     {/* volunteer */}
     {user.role === 'volunteer' && (
+      <Link to="/favorites">Избранное</Link>
+    )}
+
+    {/* volunteer */}
+    {user.role === 'volunteer' && (
       <Link to="/my-applications">Мои заявки</Link>
     )}
 
     {/* admin - пока без отдельных пунктов */}
+    {user?.role === "admin" && (
+  <Link to="/admin" className="nav-link">
+    Админ
+  </Link>
+)}
+
     <Link to="/profile">Личный кабинет</Link>
     <Link to="/chat">💬 Сообщения</Link>
 

@@ -1,17 +1,55 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import './Profile.css';
-import OrganizerStats from './OrganizerStats';
-import DraftProjects from './DraftProjects';
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import "./Profile.css";
+
+import OrganizerStats from "./OrganizerStats";
+import DraftProjects from "./DraftProjects";
+import ProjectHistory from "./ProjectHistory";
+import AdminDashboard from "./AdminDashboard";
 
 function Profile({ user, onUserUpdate }) {
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState("profile");
+
   const [profile, setProfile] = useState(null);
-  const [participationHistory, setParticipationHistory] = useState([]);
+  const [participationHistory, setParticipationHistory] = useState([]); // (можно оставить, даже если история теперь через ProjectHistory)
   const [loading, setLoading] = useState(false);
+
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({});
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // =========================
+  // Таб: восстановление + сохранение (убирает "мигание")
+  // =========================
+  useEffect(() => {
+    if (!user?.role) return;
+
+    const key = `profileActiveTab:${user.role}`;
+    const saved = localStorage.getItem(key);
+
+    const allowedTabs =
+      user.role === "organizer"
+        ? ["profile", "stats", "drafts"]
+        : user.role === "volunteer"
+        ? ["profile", "history"]
+        : user.role === "admin"
+        ? ["profile", "admin"]
+        : ["profile"];
+
+    if (saved && allowedTabs.includes(saved)) {
+      setActiveTab(saved);
+    } else {
+      setActiveTab("profile");
+      localStorage.setItem(key, "profile");
+    }
+  }, [user?.role]);
+
+  useEffect(() => {
+    if (!user?.role) return;
+    const key = `profileActiveTab:${user.role}`;
+    localStorage.setItem(key, activeTab);
+  }, [activeTab, user?.role]);
 
   // =========================
   // Load profile from server
@@ -20,44 +58,42 @@ function Profile({ user, onUserUpdate }) {
     const fetchUserProfile = async () => {
       if (!user) return;
 
+      setLoading(true);
       try {
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem("token");
         if (!token) return;
 
-        const response = await axios.get('http://localhost:5000/api/auth/me', {
+        const response = await axios.get("http://localhost:5000/api/auth/me", {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
 
         const userData = response.data;
-        console.log('📥 Загружен профиль из базы:', userData);
 
         const userProfile = {
           firstName: userData.firstName,
           lastName: userData.lastName,
           email: userData.email,
           role: userData.role,
-          phone: userData.phone || '',
-          skills: userData.skills || '',
-          interests: userData.interests || '',
-          bio: userData.bio || '',
+          phone: userData.phone || "",
+          skills: userData.skills || "",
+          interests: userData.interests || "",
+          bio: userData.bio || "",
           createdAt: userData.createdAt,
         };
 
         setProfile(userProfile);
         setFormData({
-          firstName: userProfile.firstName,
-          lastName: userProfile.lastName,
-          phone: userProfile.phone,
-          skills: userProfile.skills,
-          interests: userProfile.interests,
-          bio: userProfile.bio,
+          firstName: userProfile.firstName || "",
+          lastName: userProfile.lastName || "",
+          phone: userProfile.phone || "",
+          skills: userProfile.skills || "",
+          interests: userProfile.interests || "",
+          bio: userProfile.bio || "",
         });
 
-        // ⚠️ НЕ пишем localStorage тут (это теперь делает App.js через onUserUpdate)
-
-        // Если хочешь, можно обновить App.js user сразу актуальными данными:
+        // ✅ Обновляем user в App.js (Navbar и роли синхронизируются)
         if (onUserUpdate) {
           onUserUpdate({
             ...user,
@@ -65,7 +101,7 @@ function Profile({ user, onUserUpdate }) {
           });
         }
       } catch (error) {
-        console.error('Ошибка при загрузке профиля:', error);
+        console.error("Ошибка при загрузке профиля:", error);
 
         // fallback: local state из user
         const userProfile = {
@@ -73,44 +109,48 @@ function Profile({ user, onUserUpdate }) {
           lastName: user.lastName,
           email: user.email,
           role: user.role,
-          phone: user.phone || '',
-          skills: user.skills || '',
-          interests: user.interests || '',
-          bio: user.bio || '',
+          phone: user.phone || "",
+          skills: user.skills || "",
+          interests: user.interests || "",
+          bio: user.bio || "",
           createdAt: user.createdAt || new Date().toISOString(),
         };
 
         setProfile(userProfile);
         setFormData({
-          firstName: userProfile.firstName,
-          lastName: userProfile.lastName,
-          phone: userProfile.phone,
-          skills: userProfile.skills,
-          interests: userProfile.interests,
-          bio: userProfile.bio,
+          firstName: userProfile.firstName || "",
+          lastName: userProfile.lastName || "",
+          phone: userProfile.phone || "",
+          skills: userProfile.skills || "",
+          interests: userProfile.interests || "",
+          bio: userProfile.bio || "",
         });
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchUserProfile();
-  }, [user, onUserUpdate]);
+    // ✅ ВАЖНО: зависимость только от user.id, чтобы не было "перезапусков" из-за изменения объекта user
+  }, [user?.id]);
 
   // =========================
-  // Load participation history
+  // Load participation history (если где-то используется)
   // =========================
   useEffect(() => {
-    if (user && activeTab === 'history') {
+    if (user && activeTab === "history") {
       fetchParticipationHistory();
     }
-  }, [activeTab, user]);
+    // ✅ не зависим от всего user-объекта
+  }, [activeTab, user?.id]);
 
   const fetchParticipationHistory = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       if (!token) return;
 
       const response = await axios.get(
-        'http://localhost:5000/api/profile/participation-history',
+        "http://localhost:5000/api/profile/participation-history",
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -120,7 +160,7 @@ function Profile({ user, onUserUpdate }) {
 
       setParticipationHistory(response.data);
     } catch (error) {
-      console.error('Ошибка при загрузке истории участия:', error);
+      console.error("Ошибка при загрузке истории участия:", error);
     }
   };
 
@@ -131,14 +171,14 @@ function Profile({ user, onUserUpdate }) {
     e.preventDefault();
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       if (!token) {
-        alert('Требуется авторизация');
+        alert("Требуется авторизация");
         return;
       }
 
       const response = await axios.put(
-        'http://localhost:5000/api/profile',
+        "http://localhost:5000/api/profile",
         {
           firstName: formData.firstName,
           lastName: formData.lastName,
@@ -154,24 +194,18 @@ function Profile({ user, onUserUpdate }) {
         }
       );
 
-      console.log('✅ Ответ от сервера:', response.data);
-
-      // response.data обычно содержит обновлённые поля профиля (firstName/lastName/phone/skills/interests/bio)
       const updatedFields = response.data;
 
-      // 1) обновляем profile (сохраняем email/role/createdAt)
       setProfile((prev) => ({
         ...prev,
         ...updatedFields,
       }));
 
-      // 2) обновляем formData (чтобы форма не откатилась)
       setFormData((prev) => ({
         ...prev,
         ...updatedFields,
       }));
 
-      // 3) обновляем user в App.js -> localStorage -> Navbar
       if (onUserUpdate) {
         onUserUpdate({
           ...user,
@@ -180,13 +214,13 @@ function Profile({ user, onUserUpdate }) {
       }
 
       setEditing(false);
-      alert('Профиль успешно обновлен!');
+      alert("Профиль успешно обновлен!");
     } catch (error) {
-      console.error('❌ Ошибка при обновлении профиля:', error);
+      console.error("❌ Ошибка при обновлении профиля:", error);
       alert(
         error.response?.data?.error ||
           error.response?.data?.message ||
-          'Ошибка при обновлении профиля'
+          "Ошибка при обновлении профиля"
       );
     }
   };
@@ -198,15 +232,15 @@ function Profile({ user, onUserUpdate }) {
     const { name, value } = e.target;
 
     // only phone formatting
-    if (name === 'phone') {
-      let cleanedValue = value.replace(/[^\d+]/g, '');
+    if (name === "phone") {
+      let cleanedValue = value.replace(/[^\d+]/g, "");
 
-      if (cleanedValue.startsWith('8')) {
-        cleanedValue = '+7' + cleanedValue.substring(1);
-      } else if (cleanedValue.startsWith('7') && !cleanedValue.startsWith('+7')) {
-        cleanedValue = '+7' + cleanedValue.substring(1);
-      } else if (!cleanedValue.startsWith('+')) {
-        cleanedValue = '+7' + cleanedValue;
+      if (cleanedValue.startsWith("8")) {
+        cleanedValue = "+7" + cleanedValue.substring(1);
+      } else if (cleanedValue.startsWith("7") && !cleanedValue.startsWith("+7")) {
+        cleanedValue = "+7" + cleanedValue.substring(1);
+      } else if (!cleanedValue.startsWith("+") && cleanedValue.length > 0) {
+        cleanedValue = "+7" + cleanedValue;
       }
 
       if (cleanedValue.length > 12) {
@@ -226,88 +260,92 @@ function Profile({ user, onUserUpdate }) {
   };
 
   // =========================
-  // Delete account
+  // Helpers
   // =========================
-  const handleDeleteAccount = async () => {
-    if (
-      !window.confirm(
-        'Вы уверены, что хотите удалить аккаунт? Это действие нельзя отменить. Все ваши проекты и заявки будут удалены.'
-      )
-    ) {
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      await axios.delete('http://localhost:5000/api/auth/account', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      alert('Аккаунт успешно удален');
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/';
-    } catch (error) {
-      console.error('Ошибка при удалении аккаунта:', error);
-      alert(error.response?.data?.error || 'Не удалось удалить аккаунт');
-    }
-  };
-
-  const generateCertificate = (project) => {
-    if (!profile) {
-      alert('Не удалось создать сертификат: данные профиля не загружены');
-      return;
-    }
-
-    const certificateText = `
-      СЕРТИФИКАТ ВОЛОНТЕРА
-      Настоящим подтверждается, что
-      ${profile.firstName} ${profile.lastName}
-      принял(а) участие в проекте:
-      "${project.project.title}"
-      Дата участия: ${new Date(project.createdAt).toLocaleDateString('ru-RU')}
-      Организатор: ${project.project.creator.firstName} ${project.project.creator.lastName}
-      Благодарим за ваш вклад!
-    `;
-
-    const blob = new Blob([certificateText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `сертификат_${project.project.title.replace(/\s+/g, '_')}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   const formatPhoneDisplay = (phone) => {
-    if (!phone) return 'Не указан';
+    if (!phone) return "Не указан";
 
-    const cleaned = phone.replace(/\D/g, '');
+    const cleaned = phone.replace(/\D/g, "");
 
-    if (cleaned.length === 11 && (cleaned.startsWith('7') || cleaned.startsWith('8'))) {
+    if (cleaned.length === 11 && (cleaned.startsWith("7") || cleaned.startsWith("8"))) {
       const match = cleaned.match(/^[78]?(\d{3})(\d{3})(\d{2})(\d{2})$/);
       if (match) {
         return `+7 (${match[1]}) ${match[2]}-${match[3]}-${match[4]}`;
       }
     }
-
     return phone;
   };
 
   const handleEditStart = () => {
     setEditing(true);
     setFormData({
-      firstName: profile.firstName || '',
-      lastName: profile.lastName || '',
-      phone: profile.phone || '',
-      skills: profile.skills || '',
-      interests: profile.interests || '',
-      bio: profile.bio || '',
+      firstName: profile?.firstName || "",
+      lastName: profile?.lastName || "",
+      phone: profile?.phone || "",
+      skills: profile?.skills || "",
+      interests: profile?.interests || "",
+      bio: profile?.bio || "",
     });
+  };
+
+  // =========================
+  // Delete account
+  // =========================
+  const handleDeleteAccount = async () => {
+    if (
+      !window.confirm(
+        "Вы уверены, что хотите удалить аккаунт? Это действие нельзя отменить. Все ваши проекты и заявки будут удалены."
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete("http://localhost:5000/api/auth/account", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      alert("Аккаунт успешно удален");
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Ошибка при удалении аккаунта:", error);
+      alert(error.response?.data?.error || "Не удалось удалить аккаунт");
+    }
+  };
+
+  const generateCertificate = (project) => {
+    if (!profile) {
+      alert("Не удалось создать сертификат: данные профиля не загружены");
+      return;
+    }
+
+    const certificateText = `
+СЕРТИФИКАТ ВОЛОНТЕРА
+Настоящим подтверждается, что
+${profile.firstName} ${profile.lastName}
+принял(а) участие в проекте:
+"${project.project.title}"
+Дата участия: ${new Date(project.createdAt).toLocaleDateString("ru-RU")}
+Организатор: ${project.project.creator.firstName} ${project.project.creator.lastName}
+
+Благодарим за ваш вклад!
+`;
+
+    const blob = new Blob([certificateText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `сертификат_${project.project.title.replace(/\s+/g, "_")}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   // =========================
@@ -321,8 +359,9 @@ function Profile({ user, onUserUpdate }) {
           <p>Пользователь не авторизован</p>
           <div className="error-actions">
             <button
-              onClick={() => (window.location.href = '/login')}
+              onClick={() => (window.location.href = "/login")}
               className="btn btn-primary"
+              type="button"
             >
               Войти
             </button>
@@ -330,6 +369,10 @@ function Profile({ user, onUserUpdate }) {
         </div>
       </div>
     );
+  }
+
+  if (loading && !profile) {
+    return <div className="loading">Подготовка профиля...</div>;
   }
 
   if (!profile) {
@@ -346,66 +389,71 @@ function Profile({ user, onUserUpdate }) {
       </div>
 
       <div className="profile-tabs">
-  <button
-    className={`tab ${activeTab === 'profile' ? 'active' : ''}`}
-    onClick={() => setActiveTab('profile')}
-  >
-    📝 Профиль
-  </button>
+        <button
+          className={`tab ${activeTab === "profile" ? "active" : ""}`}
+          onClick={() => activeTab !== "profile" && setActiveTab("profile")}
+          type="button"
+        >
+          📝 Профиль
+        </button>
 
-  {/* Volunteer: история участия */}
-  {user?.role === 'volunteer' && (
-    <button
-      className={`tab ${activeTab === 'history' ? 'active' : ''}`}
-      onClick={() => setActiveTab('history')}
-    >
-      📊 История участия
-    </button>
-  )}
+        {/* Volunteer: история участия */}
+        {user?.role === "volunteer" && (
+          <button
+            className={`tab ${activeTab === "history" ? "active" : ""}`}
+            onClick={() => activeTab !== "history" && setActiveTab("history")}
+            type="button"
+          >
+            📊 История участия
+          </button>
+        )}
 
-  {/* Organizer: статистика + черновики */}
-  {user?.role === 'organizer' && (
-    <>
-      <button
-        className={`tab ${activeTab === 'stats' ? 'active' : ''}`}
-        onClick={() => setActiveTab('stats')}
-      >
-        📊 Статистика
-      </button>
+        {/* Organizer: статистика + черновики */}
+        {user?.role === "organizer" && (
+          <>
+            <button
+              className={`tab ${activeTab === "stats" ? "active" : ""}`}
+              onClick={() => activeTab !== "stats" && setActiveTab("stats")}
+              type="button"
+            >
+              📊 Статистика
+            </button>
 
-      <button
-        className={`tab ${activeTab === 'drafts' ? 'active' : ''}`}
-        onClick={() => setActiveTab('drafts')}
-      >
-        📋 Черновики
-      </button>
-    </>
-  )}
+            <button
+              className={`tab ${activeTab === "drafts" ? "active" : ""}`}
+              onClick={() => activeTab !== "drafts" && setActiveTab("drafts")}
+              type="button"
+            >
+              📋 Черновики
+            </button>
+          </>
+        )}
 
-  {/* Admin: позже добавим админ-панель */}
-  {user?.role === 'admin' && (
-    <button
-      className={`tab ${activeTab === 'admin' ? 'active' : ''}`}
-      onClick={() => setActiveTab('admin')}
-    >
-      🛡️ Админ-панель
-    </button>
-  )}
-</div>
+        {/* Admin: вкладка в профиле (если оставляешь) */}
+        {user?.role === "admin" && (
+          <button
+            className={`tab ${activeTab === "admin" ? "active" : ""}`}
+            onClick={() => activeTab !== "admin" && setActiveTab("admin")}
+            type="button"
+          >
+            🛡️ Админ-панель
+          </button>
+        )}
+      </div>
 
       <div className="profile-content">
-        {activeTab === 'profile' && (
+        {activeTab === "profile" && (
           <div className="profile-section">
             <div className="section-header">
               <h2>Личная информация</h2>
 
               {!editing ? (
-                <button className="btn btn-primary" onClick={handleEditStart}>
+                <button className="btn btn-primary" onClick={handleEditStart} type="button">
                   ✏️ Редактировать
                 </button>
               ) : (
                 <div className="edit-actions">
-                  <button className="btn btn-success" onClick={handleSaveProfile}>
+                  <button className="btn btn-success" onClick={handleSaveProfile} type="button">
                     💾 Сохранить
                   </button>
                   <button
@@ -413,16 +461,17 @@ function Profile({ user, onUserUpdate }) {
                     onClick={() => {
                       setEditing(false);
                       setFormData({
-                        firstName: profile.firstName || '',
-                        lastName: profile.lastName || '',
-                        phone: profile.phone || '',
-                        skills: profile.skills || '',
-                        interests: profile.interests || '',
-                        bio: profile.bio || '',
+                        firstName: profile.firstName || "",
+                        lastName: profile.lastName || "",
+                        phone: profile.phone || "",
+                        skills: profile.skills || "",
+                        interests: profile.interests || "",
+                        bio: profile.bio || "",
                       });
                     }}
+                    type="button"
                   >
-                    ❌ Отмена
+                    Отмена
                   </button>
                 </div>
               )}
@@ -430,44 +479,37 @@ function Profile({ user, onUserUpdate }) {
 
             {editing ? (
               <form className="profile-form">
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Имя:</label>
-                    <input
-                      type="text"
-                      name="firstName"
-                      value={formData.firstName || ''}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Фамилия:</label>
-                    <input
-                      type="text"
-                      name="lastName"
-                      value={formData.lastName || ''}
-                      onChange={handleInputChange}
-                      required
-                    />
-                  </div>
+                <div className="form-group">
+                  <label>Имя:</label>
+                  <input
+                    type="text"
+                    name="firstName"
+                    value={formData.firstName || ""}
+                    onChange={handleInputChange}
+                    placeholder="Введите имя"
+                  />
                 </div>
 
                 <div className="form-group">
-                  <label>Email:</label>
-                  <input type="email" value={profile.email} disabled className="disabled-input" />
-                  <small>Email нельзя изменить</small>
+                  <label>Фамилия:</label>
+                  <input
+                    type="text"
+                    name="lastName"
+                    value={formData.lastName || ""}
+                    onChange={handleInputChange}
+                    placeholder="Введите фамилию"
+                  />
                 </div>
 
                 <div className="form-group">
                   <label>Телефон:</label>
                   <input
-                    type="tel"
+                    type="text"
                     name="phone"
-                    value={formData.phone || ''}
+                    value={formData.phone || ""}
                     onChange={handleInputChange}
                     placeholder="+79991234567"
-                    pattern="^\+7\d{10}$"
+                    pattern="^\\+7\\d{10}$"
                     maxLength="12"
                   />
                   <small>Формат: +79991234567</small>
@@ -478,7 +520,7 @@ function Profile({ user, onUserUpdate }) {
                   <input
                     type="text"
                     name="skills"
-                    value={formData.skills || ''}
+                    value={formData.skills || ""}
                     onChange={handleInputChange}
                     placeholder="Перечислите ваши навыки через запятую"
                   />
@@ -488,7 +530,7 @@ function Profile({ user, onUserUpdate }) {
                   <label>Интересы:</label>
                   <textarea
                     name="interests"
-                    value={formData.interests || ''}
+                    value={formData.interests || ""}
                     onChange={handleInputChange}
                     placeholder="Перечислите ваши интересы через запятую"
                     rows="3"
@@ -499,7 +541,7 @@ function Profile({ user, onUserUpdate }) {
                   <label>О себе:</label>
                   <textarea
                     name="bio"
-                    value={formData.bio || ''}
+                    value={formData.bio || ""}
                     onChange={handleInputChange}
                     placeholder="Расскажите о себе, своем опыте волонтерства"
                     rows="4"
@@ -515,32 +557,38 @@ function Profile({ user, onUserUpdate }) {
                       {profile.firstName} {profile.lastName}
                     </span>
                   </div>
+
                   <div className="info-item">
                     <strong>Email:</strong>
                     <span>{profile.email}</span>
                   </div>
+
                   <div className="info-item">
                     <strong>Телефон:</strong>
                     <span>{formatPhoneDisplay(profile.phone)}</span>
                   </div>
+
                   <div className="info-item">
                     <strong>Навыки:</strong>
-                    <span>{profile.skills || 'Не указаны'}</span>
+                    <span>{profile.skills || "Не указаны"}</span>
                   </div>
+
                   <div className="info-item">
                     <strong>Интересы:</strong>
-                    <span>{profile.interests || 'Не указаны'}</span>
+                    <span>{profile.interests || "Не указаны"}</span>
                   </div>
+
                   <div className="info-item full-width">
                     <strong>О себе:</strong>
-                    <span>{profile.bio || 'Не указано'}</span>
+                    <span>{profile.bio || "Не указано"}</span>
                   </div>
+
                   <div className="info-item">
                     <strong>Дата регистрации:</strong>
                     <span>
                       {profile.createdAt
-                        ? new Date(profile.createdAt).toLocaleDateString('ru-RU')
-                        : 'Неизвестно'}
+                        ? new Date(profile.createdAt).toLocaleDateString("ru-RU")
+                        : "Неизвестно"}
                     </span>
                   </div>
                 </div>
@@ -549,7 +597,11 @@ function Profile({ user, onUserUpdate }) {
 
             <div className="account-deletion-section">
               <div className="danger-zone">
-                <button className="btn btn-danger" onClick={() => setShowDeleteConfirm(true)}>
+                <button
+                  className="btn btn-danger"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  type="button"
+                >
                   🗑️ Удалить аккаунт
                 </button>
               </div>
@@ -560,7 +612,11 @@ function Profile({ user, onUserUpdate }) {
                 <div className="modal-content">
                   <div className="modal-header">
                     <h2>Подтверждение удаления аккаунта</h2>
-                    <button className="close-btn" onClick={() => setShowDeleteConfirm(false)}>
+                    <button
+                      className="close-btn"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      type="button"
+                    >
                       ×
                     </button>
                   </div>
@@ -581,10 +637,18 @@ function Profile({ user, onUserUpdate }) {
                   </div>
 
                   <div className="modal-actions">
-                    <button className="btn btn-danger" onClick={handleDeleteAccount}>
+                    <button
+                      className="btn btn-danger"
+                      onClick={handleDeleteAccount}
+                      type="button"
+                    >
                       Да, удалить аккаунт
                     </button>
-                    <button className="btn btn-secondary" onClick={() => setShowDeleteConfirm(false)}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => setShowDeleteConfirm(false)}
+                      type="button"
+                    >
                       Отмена
                     </button>
                   </div>
@@ -594,58 +658,31 @@ function Profile({ user, onUserUpdate }) {
           </div>
         )}
 
-        {activeTab === 'history' && (
+        {activeTab === "history" && (
           <div className="profile-section">
             <h2>История участия</h2>
-            {participationHistory.length === 0 ? (
-              <div className="empty-state">
-                <p>У вас пока нет завершенных проектов</p>
-                <p>Подавайте заявки на проекты и участвуйте в волонтерской деятельности!</p>
-              </div>
-            ) : (
-              <div className="history-list">
-                {participationHistory.map((participation) => (
-                  <div key={participation.id} className="history-item">
-                    <div className="history-content">
-                      <h3>{participation.project.title}</h3>
-                      <p>{participation.project.description}</p>
-                      <div className="history-meta">
-                        <span>
-                          Организатор: {participation.project.creator.firstName}{' '}
-                          {participation.project.creator.lastName}
-                        </span>
-                        <span>
-                          Дата участия:{' '}
-                          {new Date(participation.createdAt).toLocaleDateString('ru-RU')}
-                        </span>
-                      </div>
-                    </div>
-                    <button className="btn btn-primary" onClick={() => generateCertificate(participation)}>
-                      📄 Скачать сертификат
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
+            <ProjectHistory user={user} generateCertificate={generateCertificate} />
           </div>
         )}
 
-        {activeTab === 'stats' && user?.role === 'organizer' && (
-  <div className="profile-section">
-    <OrganizerStats user={user} />
-  </div>
-)}
+        {activeTab === "stats" && user?.role === "organizer" && (
+          <div className="profile-section">
+            <OrganizerStats user={user} />
+          </div>
+        )}
 
-{activeTab === 'drafts' && user?.role === 'organizer' && (
+        {activeTab === "drafts" && user?.role === "organizer" && (
+          <div className="profile-section">
+            <DraftProjects user={user} />
+          </div>
+        )}
+
+        {activeTab === "admin" && user?.role === "admin" && (
   <div className="profile-section">
-    <DraftProjects user={user} />
-  </div>
-)}
-        
-        {activeTab === 'admin' && (
-  <div className="profile-section">
-    <h2>Админ-панель</h2>
-    <p>Здесь будет модерация проектов, управление пользователями и роли.</p>
+    <AdminDashboard
+      user={user}
+      onOpenFullAdmin={() => (window.location.href = "/admin")}
+    />
   </div>
 )}
       </div>

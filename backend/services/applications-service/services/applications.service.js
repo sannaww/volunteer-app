@@ -52,13 +52,20 @@ exports.getProjectApplications = async ({ projectId, requesterId, requesterRole 
     throw new Error('Нет доступа к заявкам этого проекта');
   }
 
-  return prisma.application.findMany({
-    where: { projectId },
-    include: {
-      user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } },
+  const apps = await prisma.application.findMany({
+  where: { projectId },
+  include: {
+    user: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+      },
     },
-    orderBy: { createdAt: 'desc' }
-  });
+  },
+});
+return apps;
 };
 
 // Отмена заявки (volunteer, только своя и только PENDING)

@@ -89,16 +89,36 @@ app.use(
 );
 
 // Proxy → Projects Service (5002) + RBAC
-// GET — всем
-// POST/PUT/PATCH/DELETE — только organizer/admin
+// GET проектов — всем, favorites — только volunteer/admin (и всегда с токеном)
+// остальные write-методы — organizer/admin
 app.use(
   '/api/projects',
   (req, res, next) => {
-    if (!isWriteMethod(req.method)) return next();        // GET без токена
-    return attachAuth(req, res, next);                    // на write нужен токен
+    // req.path здесь УЖЕ без "/api/projects"
+    // например: "/favorites", "/favorites/12", "/1", "/"
+    const isFavoritesRoute = req.path === '/favorites' || req.path.startsWith('/favorites/');
+
+    // favorites всегда требуют токен (и GET тоже)
+    if (isFavoritesRoute) {
+      return attachAuth(req, res, next);
+    }
+    // обычные GET — без токена
+    if (!isWriteMethod(req.method)) return next();
+    // write-методы (создание/редактирование проектов) — с токеном
+    return attachAuth(req, res, next);
   },
   (req, res, next) => {
+    const isFavoritesRoute = req.path === '/favorites' || req.path.startsWith('/favorites/');
+
+    if (isFavoritesRoute) {
+      // избранное — только волонтёр и админ
+      return requireRole(['volunteer', 'admin'])(req, res, next);
+    }
+
+    // на обычные GET не накладываем роли
     if (!isWriteMethod(req.method)) return next();
+
+    // создание/редактирование проектов — organizer/admin
     return requireRole(['organizer', 'admin'])(req, res, next);
   },
   createProxyMiddleware({
@@ -107,6 +127,7 @@ app.use(
     pathRewrite: { '^/api/projects': '' },
   })
 );
+
 
 // Proxy → Applications Service (5003) + RBAC
 // Все endpoints требуют токен.

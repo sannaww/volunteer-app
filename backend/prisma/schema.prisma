@@ -43,6 +43,7 @@ model Project {
   description String
   status      ProjectStatus @default(ACTIVE)
   createdAt   DateTime      @default(now())
+  favorites   Favorite[]
 
   // Новые поля для фильтрации
   startDate          DateTime?
@@ -70,6 +71,19 @@ enum ProjectType {
   SPORTS
   MEDICAL
   OTHER
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId Int
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([userId])
+  @@index([projectId])
 }
 
 model Application {
