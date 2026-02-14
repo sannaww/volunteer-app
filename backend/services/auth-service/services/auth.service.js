@@ -126,7 +126,8 @@ async function getMe(token) {
       interests: true,
       bio: true,
       avatarUrl: true,
-      createdAt: true
+      createdAt: true,
+      points: true
     }
   });
 

@@ -19,9 +19,7 @@ function Profile({ user, onUserUpdate }) {
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
-  // =========================
   // Таб: восстановление + сохранение (убирает "мигание")
-  // =========================
   useEffect(() => {
     if (!user?.role) return;
 
@@ -51,9 +49,7 @@ function Profile({ user, onUserUpdate }) {
     localStorage.setItem(key, activeTab);
   }, [activeTab, user?.role]);
 
-  // =========================
   // Load profile from server
-  // =========================
   useEffect(() => {
     const fetchUserProfile = async () => {
       if (!user) return;
@@ -134,9 +130,7 @@ function Profile({ user, onUserUpdate }) {
     // ✅ ВАЖНО: зависимость только от user.id, чтобы не было "перезапусков" из-за изменения объекта user
   }, [user?.id]);
 
-  // =========================
   // Load participation history (если где-то используется)
-  // =========================
   useEffect(() => {
     if (user && activeTab === "history") {
       fetchParticipationHistory();
@@ -164,9 +158,7 @@ function Profile({ user, onUserUpdate }) {
     }
   };
 
-  // =========================
   // Save profile
-  // =========================
   const handleSaveProfile = async (e) => {
     e.preventDefault();
 
@@ -225,9 +217,7 @@ function Profile({ user, onUserUpdate }) {
     }
   };
 
-  // =========================
   // Input change
-  // =========================
   const handleInputChange = (e) => {
     const { name, value } = e.target;
 
@@ -259,9 +249,7 @@ function Profile({ user, onUserUpdate }) {
     }
   };
 
-  // =========================
   // Helpers
-  // =========================
   const formatPhoneDisplay = (phone) => {
     if (!phone) return "Не указан";
 
@@ -288,9 +276,7 @@ function Profile({ user, onUserUpdate }) {
     });
   };
 
-  // =========================
   // Delete account
-  // =========================
   const handleDeleteAccount = async () => {
     if (
       !window.confirm(
@@ -348,9 +334,7 @@ ${profile.firstName} ${profile.lastName}
     URL.revokeObjectURL(url);
   };
 
-  // =========================
   // Render guards
-  // =========================
   if (!user) {
     return (
       <div className="error-container">
@@ -379,9 +363,7 @@ ${profile.firstName} ${profile.lastName}
     return <div className="loading">Подготовка профиля...</div>;
   }
 
-  // =========================
   // UI
-  // =========================
   return (
     <div className="profile">
       <div className="profile-header">
@@ -562,6 +544,13 @@ ${profile.firstName} ${profile.lastName}
                     <strong>Email:</strong>
                     <span>{profile.email}</span>
                   </div>
+                  
+                  {profile?.role === "volunteer" && (
+                  <div className="info-item">
+                    <strong>Баллы:</strong>
+                    <span>⭐ {profile.points ?? 0}</span>
+                  </div>
+                  )}
 
                   <div className="info-item">
                     <strong>Телефон:</strong>

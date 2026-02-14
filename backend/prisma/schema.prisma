@@ -19,6 +19,7 @@ model User {
   emailVerified          Boolean  @default(false)
   emailVerificationToken String?
   createdAt              DateTime @default(now())
+  points Int @default(0)
 
   // ✅ Новое поле для администратора (блокировка пользователя)
   isBlocked Boolean @default(false)
@@ -38,12 +39,16 @@ model User {
 }
 
 model Project {
-  id          Int           @id @default(autoincrement())
-  title       String
-  description String
-  status      ProjectStatus @default(ACTIVE)
-  createdAt   DateTime      @default(now())
-  favorites   Favorite[]
+  id           Int           @id @default(autoincrement())
+  title        String
+  description  String
+  status       ProjectStatus @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  favorites    Favorite[]
+  avgRating    Float         @default(0)
+  reviewsCount Int           @default(0)
+
+  reviews Review[]
 
   // Новые поля для фильтрации
   startDate          DateTime?
@@ -125,4 +130,32 @@ model Message {
   @@index([senderId])
   @@index([receiverId])
   @@index([createdAt])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  projectId Int
+  authorId  String
+  rating    Int
+  text      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, authorId])
+  @@index([projectId])
+  @@index([authorId])
+}
+
+model PointsLog {
+  id            String   @id @default(cuid())
+  userId        Int
+  applicationId Int
+  points        Int
+  reason        String?
+  createdAt     DateTime @default(now())
+
+  @@unique([applicationId]) // на одну заявку — один раз
+  @@index([userId])
 }

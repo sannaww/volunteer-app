@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { getFavorites, removeFavorite } from "../api/favorites";
+import "./ProjectList.css";
 
 function Favorites() {
   const [favorites, setFavorites] = useState([]);
@@ -36,6 +37,33 @@ function Favorites() {
 
   if (loading) return <div className="loading">Загрузка...</div>;
 
+  const getStatusText = (status) => {
+  const statusMap = {
+    DRAFT: "📝 Черновик",
+    ACTIVE: "🟢 Активный",
+    COMPLETED: "✅ Завершен",
+    CANCELLED: "🔴 Отменен",
+  };
+  return statusMap[status] || status;
+};
+
+const getStatusClass = (status) => {
+  return `status-${String(status).toLowerCase()}`;
+};
+const getProjectTypeLabel = (projectType) => {
+  const typeMap = {
+    ECOLOGY: "🌱 Экология",
+    ANIMAL_WELFARE: "🐾 Защита животных",
+    EDUCATION: "📚 Образование",
+    SOCIAL: "❤️ Социальная помощь",
+    CULTURAL: "🎨 Культура",
+    SPORTS: "⚽ Спорт",
+    MEDICAL: "🏥 Медицина",
+    OTHER: "🔧 Другое",
+  };
+  return typeMap[projectType] || projectType;
+};
+
   return (
     <div className="project-list">
       <div className="page-header">
@@ -48,29 +76,78 @@ function Favorites() {
         </div>
       )}
 
-      {favorites.length === 0 ? (
-        <p>Пока нет избранных проектов.</p>
+      {favorites.map((f) => (
+  <div key={f.id} className="project-card">
+    <div className="project-header">
+      <div className="project-title-section">
+        <h2>{f.project?.title || "Проект"}</h2>
+
+        {f.project?.status && (
+  <span className={`project-status ${getStatusClass(f.project.status)}`}>
+    {getStatusText(f.project.status)}
+  </span>
+)}
+      </div>
+
+     {f.project?.projectType && (
+  <span className="project-type-badge">
+    {getProjectTypeLabel(f.project.projectType)}
+  </span>
+)}
+
+    </div>
+
+    {/* рейтинг проекта */}
+    <div style={{ marginTop: 6, opacity: 0.9 }}>
+      {f.project?.reviewsCount > 0 ? (
+        <span>
+          ⭐ {Number(f.project.avgRating).toFixed(1)} ({f.project.reviewsCount})
+        </span>
       ) : (
-        <div className="projects-grid">
-          {favorites.map((f) => (
-            <div key={f.id} className="project-card">
-              <div className="project-header">
-                <div className="project-title-section">
-                  <h2>{f.project?.title || "Проект"}</h2>
-                </div>
-              </div>
-
-              <p>{f.project?.description || ""}</p>
-
-              <div className="project-actions">
-                <button className="btn btn-danger" onClick={() => onRemove(f.projectId)}>
-                  🗑 Удалить
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <span>⭐ Нет оценок</span>
       )}
+    </div>
+
+    <p>{f.project?.description || ""}</p>
+
+    <div className="project-meta">
+      <div className="meta-item">
+        <strong>📅 Дата начала:</strong>
+        <span>
+          {f.project?.startDate
+            ? new Date(f.project.startDate).toLocaleDateString("ru-RU")
+            : "Не указана"}
+        </span>
+      </div>
+
+      <div className="meta-item">
+        <strong>📍 Местоположение:</strong>
+        <span>{f.project?.location || "Не указано"}</span>
+      </div>
+
+      <div className="meta-item">
+        <strong>👤 Создатель:</strong>
+        <span>
+          {f.project?.creator
+            ? `${f.project.creator.firstName} ${f.project.creator.lastName}`
+            : "—"}
+        </span>
+      </div>
+
+      <div className="meta-item">
+        <strong>📞 Контакты:</strong>
+        <span>{f.project?.contactInfo || "Не указаны"}</span>
+      </div>
+    </div>
+
+    <div className="project-actions">
+      <button className="btn btn-danger" onClick={() => onRemove(f.projectId)}>
+        🗑 Удалить из избранного
+      </button>
+    </div>
+  </div>
+))}
+
     </div>
   );
 }

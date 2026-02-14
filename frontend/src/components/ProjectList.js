@@ -2,12 +2,17 @@ import React, { useState, useEffect } from 'react';
 import api from '../api/client';
 import ProjectFilters from './ProjectFilters';
 import './ProjectList.css';
+
 import { getFavorites, addFavorite, removeFavorite } from "../api/favorites";
+import { getReviews, createReview } from "../api/reviews";
+import { canReview } from "../api/canReview";
+
 
 function ProjectList({ user }) {
   const [projects, setProjects] = useState([]);
   const [filteredProjects, setFilteredProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const [filters, setFilters] = useState({
     search: '',
     projectType: '',
@@ -15,95 +20,126 @@ function ProjectList({ user }) {
     dateFrom: '',
     dateTo: ''
   });
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState(null);
+
   const [editingProject, setEditingProject] = useState(null);
+
+  // Favorites
   const [favoriteIds, setFavoriteIds] = useState(new Set());
   const [toast, setToast] = useState("");
 
-  useEffect(() => {
-    fetchProjects();
-    
-    // Автоматическое обновление каждые 30 секунд
-    // const interval = setInterval(fetchProjects, 30000);
-    
-    // return () => clearInterval(interval);
-    // Загружаем избранное только если волонтёр залогинен
-  if (user && user.role === "volunteer") {
-    loadFavorites();
-  }
-  }, []);
+  // Reviews modal
+  const [reviewModalProject, setReviewModalProject] = useState(null); // store whole project object
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewText, setReviewText] = useState("");
+  const [reviewMsg, setReviewMsg] = useState("");
+
+  const [reviewAllowed, setReviewAllowed] = useState(null); // null / true / false
+  const [reviewChecking, setReviewChecking] = useState(false);
+
+  // Reviews list modal
+const [reviewsModalProject, setReviewsModalProject] = useState(null);
+const [reviewsList, setReviewsList] = useState([]);
+const [reviewsLoading, setReviewsLoading] = useState(false);
+const [reviewsError, setReviewsError] = useState("");
+
+  // --- Helpers ---
+  const showToast = (text) => {
+    setToast(text);
+    setTimeout(() => setToast(""), 2000);
+  };
 
   const loadFavorites = async () => {
-  try {
-    const favs = await getFavorites();
-    setFavoriteIds(new Set(favs.map(f => f.projectId)));
-  } catch (e) {
-    console.error("Ошибка загрузки избранного:", e);
-  }
-};
-
-const showToast = (text) => {
-  setToast(text);
-  setTimeout(() => setToast(""), 2000);
-};
-
-const toggleFavorite = async (projectId) => {
-  if (!user) {
-    alert("Нужно войти в систему");
-    return;
-  }
-
-  try {
-    const isFav = favoriteIds.has(projectId);
-
-    if (isFav) {
-      await removeFavorite(projectId);
-      setFavoriteIds(prev => {
-        const next = new Set(prev);
-        next.delete(projectId);
-        return next;
-      });
-      showToast("Удалено из избранного");
-    } else {
-      await addFavorite(projectId);
-      setFavoriteIds(prev => {
-        const next = new Set(prev);
-        next.add(projectId);
-        return next;
-      });
-      showToast("Добавлено в избранное");
+    try {
+      const favs = await getFavorites();
+      setFavoriteIds(new Set(favs.map(f => f.projectId)));
+    } catch (e) {
+      console.error("Ошибка загрузки избранного:", e);
     }
-  } catch (e) {
-    alert(e?.response?.data?.message || "Ошибка при работе с избранным");
-  }
-};
+  };
+
+  const toggleFavorite = async (projectId) => {
+    if (!user) {
+      alert("Нужно войти в систему");
+      return;
+    }
+
+    try {
+      const isFav = favoriteIds.has(projectId);
+
+      if (isFav) {
+        await removeFavorite(projectId);
+        setFavoriteIds(prev => {
+          const next = new Set(prev);
+          next.delete(projectId);
+          return next;
+        });
+        showToast("Удалено из избранного");
+      } else {
+        await addFavorite(projectId);
+        setFavoriteIds(prev => {
+          const next = new Set(prev);
+          next.add(projectId);
+          return next;
+        });
+        showToast("Добавлено в избранное");
+      }
+    } catch (e) {
+      alert(e?.response?.data?.message || "Ошибка при работе с избранным");
+    }
+  };
 
   const fetchProjects = async (currentFilters = filters) => {
-  try {
-    setLoading(true);
-    
-    // Создаем параметры запроса
-    const params = new URLSearchParams();
-    if (currentFilters.search) params.append('search', currentFilters.search);
-    if (currentFilters.projectType) params.append('projectType', currentFilters.projectType);
-    if (currentFilters.location) params.append('location', currentFilters.location);
-    if (currentFilters.dateFrom) params.append('dateFrom', currentFilters.dateFrom);
-    if (currentFilters.dateTo) params.append('dateTo', currentFilters.dateTo);
-    if (currentFilters.status) params.append('status', currentFilters.status);
+    try {
+      setLoading(true);
 
-    console.log('Параметры запроса:', params.toString()); // Для отладки
+      // Создаем параметры запроса
+      const params = new URLSearchParams();
+      if (currentFilters.search) params.append('search', currentFilters.search);
+      if (currentFilters.projectType) params.append('projectType', currentFilters.projectType);
+      if (currentFilters.location) params.append('location', currentFilters.location);
+      if (currentFilters.dateFrom) params.append('dateFrom', currentFilters.dateFrom);
+      if (currentFilters.dateTo) params.append('dateTo', currentFilters.dateTo);
+      if (currentFilters.status) params.append('status', currentFilters.status);
 
-    const response = await api.get(`/api/projects?${params.toString()}`);
-    
-    setProjects(response.data);
-    setFilteredProjects(response.data);
-    setLoading(false);
-  } catch (error) {
-    console.error('Ошибка при загрузке проектов:', error);
-    setLoading(false);
-  }
-};
+      console.log('Параметры запроса:', params.toString()); // Для отладки
+
+      const response = await api.get(`/api/projects?${params.toString()}`);
+      setProjects(response.data);
+      setFilteredProjects(response.data);
+      setLoading(false);
+    } catch (error) {
+      console.error('Ошибка при загрузке проектов:', error);
+      setLoading(false);
+    }
+  };
+
+  // Initial load + reload favorites when user changes (login/logout)
+  useEffect(() => {
+    fetchProjects();
+
+    if (user && user.role === "volunteer") {
+      loadFavorites();
+    } else {
+      // если разлогинились — чистим избранное, чтобы UI не путал
+      setFavoriteIds(new Set());
+    }
+  }, [user?.id, user?.role]);
+
+  // Close review modal by ESC
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") closeReviewModal();
+    };
+
+    if (reviewModalProject) {
+      window.addEventListener("keydown", onKeyDown);
+    }
+    return () => window.removeEventListener("keydown", onKeyDown);
+
+  }, [reviewModalProject]);
 
   const handleFiltersChange = (newFilters) => {
     setFilters(newFilters);
@@ -123,69 +159,67 @@ const toggleFavorite = async (projectId) => {
   };
 
   const handleApply = async (projectId) => {
-  if (!user) {
-    alert('Для подачи заявки необходимо войти в систему');
-    return;
-  }
+    if (!user) {
+      alert('Для подачи заявки необходимо войти в систему');
+      return;
+    }
 
-  try {
-    const message = prompt('Напишите сообщение организатору (необязательно):');
+    try {
+      const message = prompt('Напишите сообщение организатору (необязательно):');
 
-    await api.post(`/api/applications/${projectId}`, {
-      message: message || ''
-    });
+      await api.post(`/api/applications/${projectId}`, {
+        message: message || ''
+      });
 
-    alert('Заявка успешно подана!');
-    fetchProjects();
-  } catch (error) {
-    alert(error.response?.data?.error || 'Ошибка при подаче заявки');
-  }
-};
+      alert('Заявка успешно подана!');
+      fetchProjects();
+    } catch (error) {
+      alert(error.response?.data?.error || 'Ошибка при подаче заявки');
+    }
+  };
 
   const handleEdit = (project) => {
     setEditingProject(project);
   };
 
   const handleSaveEdit = async (updatedProject) => {
-  try {
-    const token = localStorage.getItem('token');
-    
-    // Подготавливаем данные для отправки
-    const dataToSend = {
-      title: updatedProject.title,
-      description: updatedProject.description,
-      status: updatedProject.status,
-      startDate: updatedProject.startDate || null,
-      endDate: updatedProject.endDate || null,
-      location: updatedProject.location || '',
-      projectType: updatedProject.projectType || '',
-      volunteersRequired: updatedProject.volunteersRequired || 1,
-      contactInfo: updatedProject.contactInfo || ''
-    };
+    try {
+      // Подготавливаем данные для отправки
+      const dataToSend = {
+        title: updatedProject.title,
+        description: updatedProject.description,
+        status: updatedProject.status,
+        startDate: updatedProject.startDate || null,
+        endDate: updatedProject.endDate || null,
+        location: updatedProject.location || '',
+        projectType: updatedProject.projectType || '',
+        volunteersRequired: updatedProject.volunteersRequired || 1,
+        contactInfo: updatedProject.contactInfo || ''
+      };
 
-    console.log('Отправляемые данные:', dataToSend); // Для отладки
+      console.log('Отправляемые данные:', dataToSend); // Для отладки
 
-    const response = await api.put(
-  `/api/projects/${updatedProject.id}`,
-  dataToSend
-);
+      const response = await api.put(
+        `/api/projects/${updatedProject.id}`,
+        dataToSend
+      );
 
-    setEditingProject(null);
-    
-    // Обновляем проект в состоянии
-    setProjects(projects.map(project => 
-      project.id === updatedProject.id ? response.data : project
-    ));
-    setFilteredProjects(filteredProjects.map(project => 
-      project.id === updatedProject.id ? response.data : project
-    ));
-    
-    alert('Проект успешно обновлен!');
-  } catch (error) {
-    console.error('Ошибка при обновлении проекта:', error);
-    alert(error.response?.data?.error || 'Ошибка при обновлении проекта');
-  }
-};
+      setEditingProject(null);
+
+      // Обновляем проект в состоянии
+      setProjects(projects.map(project =>
+        project.id === updatedProject.id ? response.data : project
+      ));
+      setFilteredProjects(filteredProjects.map(project =>
+        project.id === updatedProject.id ? response.data : project
+      ));
+
+      alert('Проект успешно обновлен!');
+    } catch (error) {
+      console.error('Ошибка при обновлении проекта:', error);
+      alert(error.response?.data?.error || 'Ошибка при обновлении проекта');
+    }
+  };
 
   const handleDeleteClick = (project) => {
     setProjectToDelete(project);
@@ -194,11 +228,11 @@ const toggleFavorite = async (projectId) => {
 
   const handleDeleteConfirm = async () => {
     try {
-      const token = localStorage.getItem('token');
       await api.delete(`/api/projects/${projectToDelete.id}`);
-      
+
       setShowDeleteModal(false);
       setProjectToDelete(null);
+
       fetchProjects(); // Обновляем список проектов
       alert('Проект успешно удален!');
     } catch (error) {
@@ -211,7 +245,7 @@ const toggleFavorite = async (projectId) => {
       'ECOLOGY': '🌱 Экология',
       'ANIMAL_WELFARE': '🐾 Защита животных',
       'EDUCATION': '📚 Образование',
-      'SOCIAL': '❤️ Социальная помощь',
+      'SOCIAL': '❤️Социальная помощь',
       'CULTURAL': '🎨 Культура',
       'SPORTS': '⚽ Спорт',
       'MEDICAL': '🏥 Медицина',
@@ -221,60 +255,139 @@ const toggleFavorite = async (projectId) => {
   };
 
   // Функция для отображения статуса
-const getStatusText = (status) => {
-  const statusMap = {
-    'DRAFT': '📝 Черновик',
-    'ACTIVE': '🟢 Активный', 
-    'COMPLETED': '✅ Завершен',
-    'CANCELLED': '🔴 Отменен'
+  const getStatusText = (status) => {
+    const statusMap = {
+      'DRAFT': '📝 Черновик',
+      'ACTIVE': '🟢 Активный',
+      'COMPLETED': '✅ Завершен',
+      'CANCELLED': '🔴 Отменен'
+    };
+    return statusMap[status] || status;
   };
-  return statusMap[status] || status;
-};
 
-const getStatusClass = (status) => {
-  return `status-${status.toLowerCase()}`;
-};
+  const getStatusClass = (status) => {
+    return `status-${String(status).toLowerCase()}`;
+  };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'Не указана';
     return new Date(dateString).toLocaleDateString('ru-RU');
   };
-const formatPhoneDisplay = (phone) => {
-  if (!phone) return 'Не указано';
-  
-  const cleaned = phone.replace(/\D/g, '');
-  
-  if (cleaned.length === 11 && (cleaned.startsWith('7') || cleaned.startsWith('8'))) {
-    const match = cleaned.match(/^[78]?(\d{3})(\d{3})(\d{2})(\d{2})$/);
-    if (match) {
-      return `+7 (${match[1]}) ${match[2]}-${match[3]}-${match[4]}`;
+
+  const formatPhoneDisplay = (phone) => {
+    if (!phone) return 'Не указано';
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 11 && (cleaned.startsWith('7') || cleaned.startsWith('8'))) {
+      const match = cleaned.match(/^[78]?(\d{3})(\d{3})(\d{2})(\d{2})$/);
+      if (match) {
+        return `+7 (${match[1]}) ${match[2]}-${match[3]}-${match[4]}`;
+      }
     }
-  }
-  
-  return phone;
-};
-
-const handleMessageOrganizer = (project) => {
-  if (!user) {
-    alert('Для отправки сообщений необходимо войти в систему');
-    return;
-  }
-
-  if (!project.creator?.id) {
-    alert('Не удалось определить организатора проекта');
-    return;
-  }
-
-  const organizerInfo = {
-    id: project.creator.id,
-    firstName: project.creator.firstName,
-    lastName: project.creator.lastName,
-    role: project.creator.role || 'organizer'
+    return phone;
   };
 
-  localStorage.setItem('selectedOrganizer', JSON.stringify(organizerInfo));
-  window.location.href = '/chat';
+  const handleMessageOrganizer = (project) => {
+    if (!user) {
+      alert('Для отправки сообщений необходимо войти в систему');
+      return;
+    }
+
+    if (!project.creator?.id) {
+      alert('Не удалось определить организатора проекта');
+      return;
+    }
+
+    const organizerInfo = {
+      id: project.creator.id,
+      firstName: project.creator.firstName,
+      lastName: project.creator.lastName,
+      role: project.creator.role || 'organizer'
+    };
+
+    localStorage.setItem('selectedOrganizer', JSON.stringify(organizerInfo));
+    window.location.href = '/chat';
+  };
+
+  // --- Reviews modal controls ---
+ const openReviewModal = async (project) => {
+  setReviewModalProject(project);
+  setReviewRating(5);
+  setReviewText("");
+  setReviewMsg("");
+  setReviewAllowed(null);
+  setReviewChecking(true);
+
+  try {
+    const data = await canReview(project.id);
+    setReviewAllowed(!!data.canReview);
+  } catch (e) {
+    setReviewAllowed(false);
+    setReviewMsg("Не удалось проверить право на отзыв");
+  } finally {
+    setReviewChecking(false);
+  }
 };
+
+  const closeReviewModal = () => {
+    setReviewModalProject(null);
+    setReviewMsg("");
+  };
+
+  const openReviewsModal = async (project) => {
+  setReviewsModalProject(project);
+  setReviewsError("");
+  setReviewsLoading(true);
+
+  try {
+    const data = await getReviews(project.id);
+    setReviewsList(data);
+  } catch (e) {
+    setReviewsError(e?.response?.data?.message || "Ошибка загрузки отзывов");
+  } finally {
+    setReviewsLoading(false);
+  }
+};
+
+const closeReviewsModal = () => {
+  setReviewsModalProject(null);
+  setReviewsList([]);
+  setReviewsError("");
+};
+
+  const submitReview = async () => {
+    try {
+      setReviewMsg("");
+      if (!reviewModalProject) return;
+
+      if (!reviewRating || Number(reviewRating) < 1 || Number(reviewRating) > 5) {
+        setReviewMsg("Оценка должна быть от 1 до 5");
+        return;
+      }
+
+      if (reviewText.trim().length < 5) {
+        setReviewMsg("Текст отзыва слишком короткий (минимум 5 символов)");
+        return;
+      }
+
+      await createReview(reviewModalProject.id, {
+        rating: Number(reviewRating),
+        text: reviewText.trim(),
+      });
+
+      setReviewMsg("✅ Отзыв отправлен!");
+      await fetchProjects();
+
+      setTimeout(() => {
+        closeReviewModal();
+      }, 800);
+    } catch (e) {
+      const msg =
+        e?.response?.data?.message ||
+        e?.response?.data?.error ||
+        "Ошибка отправки отзыва";
+      setReviewMsg(msg);
+    }
+  };
 
   if (loading) {
     return <div className="loading">Загрузка проектов...</div>;
@@ -284,7 +397,7 @@ const handleMessageOrganizer = (project) => {
     <div className="project-list">
       <div className="page-header">
         <h1>Волонтерские проекты</h1>
-        <button 
+        <button
           className="btn btn-primary"
           onClick={() => fetchProjects()}
           disabled={loading}
@@ -293,7 +406,7 @@ const handleMessageOrganizer = (project) => {
         </button>
       </div>
 
-      <ProjectFilters 
+      <ProjectFilters
         filters={filters}
         onFiltersChange={handleFiltersChange}
         onReset={handleResetFilters}
@@ -302,32 +415,42 @@ const handleMessageOrganizer = (project) => {
       <div className="projects-stats">
         Найдено проектов: {filteredProjects.length}
       </div>
-      
+
       {toast && (
-  <div style={{ margin: "10px 0", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}>
-    {toast}
-  </div>
-)}
+        <div style={{ margin: "10px 0", padding: 10, border: "1px solid #ddd", borderRadius: 8 }}>
+          {toast}
+        </div>
+      )}
 
       <div className="projects-grid">
         {filteredProjects.map(project => (
           <div key={project.id} className="project-card">
             <div className="project-header">
-  <div className="project-title-section">
-    <h2>{project.title}</h2>
-    <span className={`project-status ${getStatusClass(project.status)}`}>
-      {getStatusText(project.status)}
-    </span>
-  </div>
-  {project.projectType && (
-    <span className="project-type-badge">
-      {getProjectTypeLabel(project.projectType)}
-    </span>
-  )}
-</div>
-            
+              <div className="project-title-section">
+                <h2>{project.title}</h2>
+                <span className={`project-status ${getStatusClass(project.status)}`}>
+                  {getStatusText(project.status)}
+                </span>
+              </div>
+
+              {project.projectType && (
+                <span className="project-type-badge">
+                  {getProjectTypeLabel(project.projectType)}
+                </span>
+              )}
+            </div>
+
+            {/* Rating display */}
+            <div style={{ marginTop: 6, opacity: 0.9 }}>
+              {project.reviewsCount > 0 ? (
+                <span>⭐ {Number(project.avgRating).toFixed(1)} ({project.reviewsCount})</span>
+              ) : (
+                <span>⭐ Нет оценок</span>
+              )}
+            </div>
+
             <p>{project.description}</p>
-            
+
             <div className="project-meta">
               <div className="meta-item">
                 <strong>📅 Дата начала:</strong>
@@ -346,95 +469,108 @@ const handleMessageOrganizer = (project) => {
                 <span>{project.volunteersRequired}</span>
               </div>
               <div className="meta-item">
-  <strong>📞 Контакты:</strong>
-  <span>
-    {project.contactInfo ? 
-      (project.contactInfo.includes('@') 
-        ? project.contactInfo
-        : formatPhoneDisplay(project.contactInfo)
-      ) 
-      : 'Не указаны'
-    }
-  </span>
-</div>
+                <strong>📞 Контакты:</strong>
+                <span>
+                  {project.contactInfo ?
+                    (project.contactInfo.includes('@')
+                      ? project.contactInfo
+                      : formatPhoneDisplay(project.contactInfo)
+                    )
+                    : 'Не указаны'
+                  }
+                </span>
+              </div>
               <div className="meta-item">
                 <strong>📊 Заявки:</strong>
                 <span>
-                  Всего: {project.applicationsCount} 
-                  {project.pendingApplicationsCount > 0 && 
+                  Всего: {project.applicationsCount}
+                  {project.pendingApplicationsCount > 0 &&
                     `, Новые: ${project.pendingApplicationsCount}`
                   }
                 </span>
               </div>
             </div>
 
-           <div className="project-actions">
-  {user && user.role === 'volunteer' && (
-    <>
-      {project.status === 'ACTIVE' ? (
-        <>
-          <button
-  className="btn"
-  onClick={() => toggleFavorite(project.id)}
-  style={{
-    border: "1px solid #ccc",
-    background: "white",
-    fontSize: 18
-  }}
-  title="В избранное"
->
-  {favoriteIds.has(project.id) ? "❤️" : "🤍"}
-</button>
-
-          {/* Кнопка подачи заявки */}
-          <button
-            className="btn btn-primary"
-            onClick={() => handleApply(project.id)}
-          >
-            📝 Подать заявку
-          </button>
-          <button
-            className="btn btn-secondary"
-            onClick={() => handleMessageOrganizer(project)}
-          >
-            💬 Написать организатору
-          </button>
-        </>
-      ) : (
-        <div className="project-not-available">
-          {project.status === 'COMPLETED' 
-            ? '✅ Проект завершен' 
-            : '❌ Проект отменен'}
-          <br />
-          <small>Заявки не принимаются</small>
-        </div>
-      )}
-    </>
-  )}            
-              {user && user.id === project.createdBy && (
+            <div className="project-actions">
+              {user && user.role === 'volunteer' && project.status !== "CANCELLED" && (
                 <>
-                  <button 
-                    className="btn btn-warning"
-                    onClick={() => handleEdit(project)}
-                  >
-                    ✏️ Редактировать
-                  </button>
-                  <button 
-                    className="btn btn-danger"
-                    onClick={() => handleDeleteClick(project)}
-                  >
-                    🗑️ Удалить
+                  {project.status === 'ACTIVE' ? (
+                    <>
+                      {/* Favorite */}
+                      <button
+                        className="btn"
+                        onClick={() => toggleFavorite(project.id)}
+                        style={{
+                          border: "1px solid #ccc",
+                          background: "white",
+                          fontSize: 18
+                        }}
+                        title="В избранное"
+                      >
+                        {favoriteIds.has(project.id) ? "❤️" : "🤍"}
+                      </button>
+
+                      {/* Apply */}
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => handleApply(project.id)}
+                      >
+                        📝 Подать заявку
+                      </button>
+
+                      {/* Message organizer */}
+                      <button
+                        className="btn btn-secondary"
+                        onClick={() => handleMessageOrganizer(project)}
+                      >
+                        💬 Написать организатору
+                      </button>
+                    </>
+                  ) : (
+                    <div className="project-not-available">
+                      {project.status === 'COMPLETED'
+                        ? '✅ Проект завершен'
+                        : '❌ Проект отменен'}
+                      <br />
+                      <small>Заявки не принимаются</small>
+                    </div>
+                  )}
+
+                  {/* Review button (can be shown for any status, you can restrict if you want) */}
+                  
+                  <button className="btn" onClick={() => openReviewModal(project)}>
+                    📝 Оставить отзыв
                   </button>
                 </>
               )}
-              
+<button className="btn" onClick={() => openReviewsModal(project)}>
+  📖 Отзывы
+</button>
+
               {user && user.id === project.createdBy && (
-                <button 
+                <>
+                  <button
+                    className="btn btn-warning"
+                    onClick={() => handleEdit(project)}
+                  >
+                    ✏️Редактировать
+                  </button>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => handleDeleteClick(project)}
+                  >
+                    🗑️Удалить
+                  </button>
+                </>
+              )}
+
+              {user && user.id === project.createdBy && (
+                <button
                   className="btn btn-success"
                   onClick={() => window.location.href = `/project-applications/${project.id}`}
                 >
-                  👥 Управление заявками 
-                  {project.pendingApplicationsCount > 0 && 
+                  👥 Управление заявками
+                  {project.pendingApplicationsCount > 0 &&
                     ` (${project.pendingApplicationsCount} новых)`
                   }
                 </button>
@@ -448,7 +584,7 @@ const handleMessageOrganizer = (project) => {
         <div className="empty-state">
           <h3>Проекты не найдены</h3>
           <p>Попробуйте изменить параметры поиска или сбросить фильтры</p>
-          <button 
+          <button
             className="btn btn-primary"
             onClick={handleResetFilters}
           >
@@ -457,13 +593,190 @@ const handleMessageOrganizer = (project) => {
         </div>
       )}
 
+      {/* ✅ Reviews modal rendered ONCE (outside map) */}
+      {reviewModalProject && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 16,
+          }}
+          onMouseDown={(e) => {
+            // close only when clicking on the overlay (not on select dropdown etc.)
+            if (e.target === e.currentTarget) closeReviewModal();
+          }}
+        >
+          <div
+            style={{
+              background: "white",
+              borderRadius: 12,
+              padding: 18,
+              width: "min(520px, 95vw)",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ marginTop: 0 }}>Отзыв о проекте</h3>
+            <div style={{ marginBottom: 10, fontWeight: 600 }}>
+              {reviewModalProject.title}
+            </div>
+
+            {reviewChecking ? (
+            <div>Проверяем возможность оставить отзыв...</div>
+          ) : reviewAllowed === false ? (
+            
+            <div style={{ color: "crimson", marginTop: 10 }}>
+              Оставить отзыв можно только после одобрения заявки (APPROVED).
+              <div style={{ marginTop: 12, textAlign: "right" }}>
+                <button className="btn" onClick={closeReviewModal}>Закрыть</button>
+              </div>
+            </div>
+          ) : (
+            <>
+            
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: "block", marginBottom: 6 }}>Оценка:</label>
+        <select
+          value={reviewRating}
+          onChange={(e) => setReviewRating(e.target.value)}
+          style={{ padding: 8, width: 120 }}
+        >
+          <option value={1}>1</option>
+          <option value={2}>2</option>
+          <option value={3}>3</option>
+          <option value={4}>4</option>
+          <option value={5}>5</option>
+        </select>
+      </div>
+
+    <div style={{ marginBottom: 12 }}>
+      <label style={{ display: "block", marginBottom: 6 }}>Комментарий:</label>
+      <textarea
+        value={reviewText}
+        onChange={(e) => setReviewText(e.target.value)}
+        rows={4}
+        style={{ width: "100%", padding: 10, borderRadius: 8 }}
+        placeholder="Например: всё было организовано отлично..."
+      />
+    </div>
+
+    {reviewMsg && (
+      <div style={{ marginBottom: 12, color: reviewMsg.startsWith("✅") ? "green" : "crimson" }}>
+        {reviewMsg}
+      </div>
+    )}
+
+    <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+      <button className="btn btn-primary" onClick={submitReview}>
+        Отправить
+      </button>
+      <button className="btn" onClick={closeReviewModal}>
+        Отмена
+      </button>
+    </div>
+  </>
+)}
+
+            <div style={{ marginTop: 10, fontSize: 12, opacity: 0.7 }}>
+              Подсказка: нажми Esc, чтобы закрыть окно.
+            </div>
+          </div>
+        </div>
+      )}
+
+{reviewsModalProject && (
+  <div
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(0,0,0,0.4)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 9999,
+      padding: 16,
+    }}
+    onMouseDown={(e) => {
+      if (e.target === e.currentTarget) closeReviewsModal();
+    }}
+  >
+    <div
+      style={{
+        background: "white",
+        borderRadius: 12,
+        padding: 18,
+        width: "min(720px, 95vw)",
+        maxHeight: "85vh",
+        overflow: "auto",
+        boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      <h3 style={{ marginTop: 0 }}>Отзывы</h3>
+      <div style={{ marginBottom: 12, fontWeight: 600 }}>
+        {reviewsModalProject.title}
+      </div>
+
+      {reviewsLoading ? (
+        <div>Загрузка отзывов...</div>
+      ) : reviewsError ? (
+        <div style={{ color: "crimson" }}>{reviewsError}</div>
+      ) : reviewsList.length === 0 ? (
+        <div>Пока нет отзывов.</div>
+      ) : (
+        <div style={{ display: "grid", gap: 10 }}>
+          {reviewsList.map((r) => (
+            <div
+              key={r.id}
+              style={{
+                border: "1px solid #ddd",
+                borderRadius: 10,
+                padding: 12,
+              }}
+            >
+              <div style={{ fontWeight: 700 }}>⭐ {r.rating}</div>
+
+              {r.text ? (
+                <div style={{ marginTop: 6 }}>{r.text}</div>
+              ) : (
+                <div style={{ marginTop: 6, opacity: 0.7 }}>Без текста</div>
+              )}
+
+              <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+                {new Date(r.createdAt).toLocaleString("ru-RU")}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginTop: 14, textAlign: "right" }}>
+        <button className="btn" onClick={closeReviewsModal}>
+          Закрыть
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
       {/* Модальное окно подтверждения удаления */}
       {showDeleteModal && (
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
               <h2>Подтверждение удаления</h2>
-              <button 
+              <button
                 className="close-btn"
                 onClick={() => setShowDeleteModal(false)}
               >
@@ -473,13 +786,13 @@ const handleMessageOrganizer = (project) => {
             <p>Вы уверены, что хотите удалить проект "{projectToDelete?.title}"?</p>
             <p>Это действие нельзя отменить.</p>
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-              <button 
+              <button
                 className="btn btn-danger"
                 onClick={handleDeleteConfirm}
               >
                 Да, удалить
               </button>
-              <button 
+              <button
                 className="btn"
                 onClick={() => setShowDeleteModal(false)}
                 style={{ backgroundColor: '#6c757d', color: 'white' }}
@@ -493,7 +806,7 @@ const handleMessageOrganizer = (project) => {
 
       {/* Модальное окно редактирования */}
       {editingProject && (
-        <EditProjectModal 
+        <EditProjectModal
           project={editingProject}
           onSave={handleSaveEdit}
           onCancel={() => setEditingProject(null)}
@@ -521,7 +834,7 @@ function EditProjectModal({ project, onSave, onCancel }) {
     { value: 'ECOLOGY', label: '🌱 Экология' },
     { value: 'ANIMAL_WELFARE', label: '🐾 Защита животных' },
     { value: 'EDUCATION', label: '📚 Образование' },
-    { value: 'SOCIAL', label: '❤️ Социальная помощь' },
+    { value: 'SOCIAL', label: '❤️Социальная помощь' },
     { value: 'CULTURAL', label: '🎨 Культура' },
     { value: 'SPORTS', label: '⚽ Спорт' },
     { value: 'MEDICAL', label: '🏥 Медицина' },
@@ -529,14 +842,14 @@ function EditProjectModal({ project, onSave, onCancel }) {
   ];
 
   const handleSubmit = (e) => {
-  e.preventDefault();
-  console.log('Данные формы перед отправкой:', formData); // Отладочная информация
-  onSave({
-    ...project,
-    ...formData,
-    volunteersRequired: parseInt(formData.volunteersRequired)
-  });
-};
+    e.preventDefault();
+    console.log('Данные формы перед отправкой:', formData); // Отладочная информация
+    onSave({
+      ...project,
+      ...formData,
+      volunteersRequired: parseInt(formData.volunteersRequired, 10)
+    });
+  };
 
   const handleChange = (e) => {
     setFormData({
@@ -552,7 +865,7 @@ function EditProjectModal({ project, onSave, onCancel }) {
           <h2>Редактировать проект</h2>
           <button className="close-btn" onClick={onCancel}>×</button>
         </div>
-        
+
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Название проекта:</label>

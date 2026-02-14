@@ -13,6 +13,11 @@ function Navbar({ user, onLogout }) {
         {user && (
           <div className="user-welcome-nav">
             Привет, {user.firstName}!
+  {user?.role === "volunteer" && typeof user.points === "number" && (
+    <span style={{ marginLeft: 10 }}>
+      ⭐ {user.points}
+    </span>
+  )}
           </div>
         )}
       </div>

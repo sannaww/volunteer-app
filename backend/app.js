@@ -94,33 +94,37 @@ app.use(
 app.use(
   '/api/projects',
   (req, res, next) => {
-    // req.path здесь УЖЕ без "/api/projects"
-    // например: "/favorites", "/favorites/12", "/1", "/"
-    const isFavoritesRoute = req.path === '/favorites' || req.path.startsWith('/favorites/');
+  const isFavoritesRoute = req.path === "/favorites" || req.path.startsWith("/favorites/");
+  const isReviewsRoute = req.path === "/reviews" || req.path.startsWith("/reviews/");
 
-    // favorites всегда требуют токен (и GET тоже)
-    if (isFavoritesRoute) {
-      return attachAuth(req, res, next);
-    }
-    // обычные GET — без токена
-    if (!isWriteMethod(req.method)) return next();
-    // write-методы (создание/редактирование проектов) — с токеном
-    return attachAuth(req, res, next);
-  },
+  // favorites: всегда с токеном
+  if (isFavoritesRoute) return attachAuth(req, res, next);
+
+  // reviews: POST только с токеном
+  if (isReviewsRoute && req.method === "POST") return attachAuth(req, res, next);
+
+  // обычные GET — без токена
+  if (!isWriteMethod(req.method)) return next();
+
+  // write проекты — с токеном
+  return attachAuth(req, res, next);
+},
   (req, res, next) => {
     const isFavoritesRoute = req.path === '/favorites' || req.path.startsWith('/favorites/');
+    const isReviewsRoute = req.path === "/reviews" || req.path.startsWith("/reviews/");
 
     if (isFavoritesRoute) {
-      // избранное — только волонтёр и админ
-      return requireRole(['volunteer', 'admin'])(req, res, next);
-    }
+    return requireRole(["volunteer", "admin"])(req, res, next);
+  }
 
-    // на обычные GET не накладываем роли
-    if (!isWriteMethod(req.method)) return next();
+  if (isReviewsRoute && req.method === "POST") {
+    return requireRole(["volunteer", "admin"])(req, res, next);
+  }
 
-    // создание/редактирование проектов — organizer/admin
-    return requireRole(['organizer', 'admin'])(req, res, next);
-  },
+  if (!isWriteMethod(req.method)) return next();
+
+  return requireRole(["organizer", "admin"])(req, res, next);
+},
   createProxyMiddleware({
     target: 'http://localhost:5002',
     changeOrigin: true,
@@ -138,6 +142,9 @@ app.use(
     // req.path будет уже без "/api/applications" (но ДО pathRewrite), поэтому тут так:
     // Пример: /my, /project/2, /2
     if (req.method === 'GET' && req.path === '/my') {
+      return next(); // любой авторизованный
+    }
+    if (req.method === "GET" && req.path.startsWith("/can-review/")) {
       return next(); // любой авторизованный
     }
 

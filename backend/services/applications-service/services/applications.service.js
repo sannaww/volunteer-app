@@ -1,5 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const AUTH_SERVICE_URL = "http://localhost:5001";
+const POINTS_FOR_APPROVE = 10; // сколько баллов даём за одобренную заявку
 
 // Создать заявку (volunteer)
 exports.createApplication = async ({ userId, projectId, message }) => {
@@ -85,6 +87,7 @@ exports.updateStatus = async ({ applicationId, newStatus, requesterId, requester
     where: { id: applicationId },
     include: { project: true }
   });
+  
   if (!app) throw new Error('Заявка не найдена');
 
   // organizer -> только свой проект
@@ -97,11 +100,56 @@ exports.updateStatus = async ({ applicationId, newStatus, requesterId, requester
     throw new Error('Нельзя изменить заявку со статусом: ' + app.status);
   }
 
-  return prisma.application.update({
-    where: { id: applicationId },
-    data: { status: newStatus },
-    include: {
-      user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } }
-    }
+  // 1️⃣ Сначала обновляем статус
+const updated = await prisma.application.update({
+  where: { id: applicationId },
+  data: { status: newStatus },
+  include: {
+    user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } }
+  }
+});
+
+// 2️⃣ Если заявка одобрена — начисляем баллы
+if (newStatus === "APPROVED") {
+
+  // Проверяем, начисляли ли уже
+  const already = await prisma.pointsLog.findUnique({
+    where: { applicationId: updated.id }
   });
+
+  if (!already) {
+
+    const AUTH_SERVICE_URL = "http://localhost:5001";
+    const POINTS_FOR_APPROVE = 10;
+
+    // вызываем auth-service
+    const resp = await fetch(`${AUTH_SERVICE_URL}/internal/add-points`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: updated.userId,
+        points: POINTS_FOR_APPROVE,
+        reason: `Approve application #${updated.id}`
+      })
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error("Ошибка начисления баллов: " + text);
+    }
+
+    // фиксируем начисление
+    await prisma.pointsLog.create({
+      data: {
+        userId: updated.userId,
+        applicationId: updated.id,
+        points: POINTS_FOR_APPROVE,
+        reason: "Approve application"
+      }
+    });
+  }
+}
+
+// 3️⃣ Возвращаем обновлённую заявку
+return updated; 
 };
