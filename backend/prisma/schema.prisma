@@ -121,15 +121,20 @@ enum ApplicationStatus {
 }
 
 model Message {
-  id         Int      @id @default(autoincrement())
-  senderId   Int
-  receiverId Int
-  text       String
-  createdAt  DateTime @default(now())
+  id          Int       @id @default(autoincrement())
+  senderId    Int
+  receiverId  Int
+  text        String
+  createdAt   DateTime  @default(now())
+
+  deliveredAt DateTime?
+  readAt      DateTime?
 
   @@index([senderId])
   @@index([receiverId])
   @@index([createdAt])
+  @@index([deliveredAt])
+  @@index([readAt])
 }
 
 model Review {

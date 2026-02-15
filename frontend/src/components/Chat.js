@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
-import api from "../api/client";
 import { useNavigate } from "react-router-dom";
+
+import api from "../api/client";
+import { createSocket } from "../api/socket";
+
 import "./Chat.css";
 
 function Chat({ user }) {
@@ -11,7 +14,22 @@ function Chat({ user }) {
   const [loading, setLoading] = useState(true);
 
   const messagesEndRef = useRef(null);
+  const socketRef = useRef(null);
+
+  // refs to avoid stale closures inside socket callbacks
+  const userRef = useRef(user);
+  const activeConvRef = useRef(activeConversation);
+
   const navigate = useNavigate();
+
+  // keep refs up-to-date
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    activeConvRef.current = activeConversation;
+  }, [activeConversation]);
 
   // -------- helpers (UI-safe) --------
   const displayName = (u) => {
@@ -50,9 +68,19 @@ function Chat({ user }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  const addMessageIfNotExists = (msg) => {
+    setMessages((prev) => {
+      if (!msg?.id) return [...prev, msg];
+      if (prev.some((m) => m?.id === msg.id)) return prev;
+      return [...prev, msg];
+    });
+  };
+
   // -------- data loading --------
   const fetchConversations = async () => {
-    if (!user) return;
+    const currentUser = userRef.current;
+    if (!currentUser) return;
+
     try {
       const response = await api.get("/api/messages/conversations");
       setConversations(response.data || []);
@@ -64,18 +92,20 @@ function Chat({ user }) {
   };
 
   const fetchMessages = async () => {
-    if (!user || !activeConversation?.user?.id) return;
+    const currentUser = userRef.current;
+    const conv = activeConvRef.current;
+
+    if (!currentUser || !conv?.user?.id) return;
 
     try {
-      const response = await api.get(
-        `/api/messages/conversation/${activeConversation.user.id}`
-      );
+      const response = await api.get(`/api/messages/conversation/${conv.user.id}`);
       setMessages(response.data || []);
-      scrollToBottom();
+      // небольшой таймаут, чтобы DOM успел отрендериться
+      setTimeout(scrollToBottom, 0);
     } catch (error) {
       console.error("Ошибка при загрузке сообщений:", error);
       // если новый диалог — отсутствие сообщений ок
-      if (!activeConversation?.isNew) {
+      if (!conv?.isNew) {
         console.error("Ошибка загрузки существующего диалога");
       }
     }
@@ -88,14 +118,12 @@ function Chat({ user }) {
       return;
     }
     fetchConversations();
-
   }, [user, navigate]);
 
   useEffect(() => {
     if (activeConversation) {
       fetchMessages();
     }
-
   }, [activeConversation]);
 
   // Получаем organizer из localStorage (переход из карточки проекта)
@@ -111,7 +139,62 @@ function Chat({ user }) {
     } finally {
       localStorage.removeItem("selectedOrganizer");
     }
+  }, []);
 
+  // -------- Socket.IO connect (once) --------
+  useEffect(() => {
+    const s = createSocket();
+    socketRef.current = s;
+
+    s.on("connect", () => console.log("WS connected", s.id));
+    s.on("connect_error", (e) => console.log("WS connect_error:", e.message));
+
+    // Получили новое сообщение
+    s.on("message:new", (msg) => {
+      const currentUser = userRef.current;
+      const conv = activeConvRef.current;
+
+      // обновим список диалогов (lastMessage/сортировка)
+      fetchConversations();
+
+      // если диалог не выбран — просто обновили список и выходим
+      if (!conv?.user?.id || !currentUser?.id) return;
+
+      const partnerId = conv.user.id;
+
+      const isForThisChat =
+        (msg.senderId === partnerId && msg.receiverId === currentUser.id) ||
+        (msg.senderId === currentUser.id && msg.receiverId === partnerId);
+
+      if (isForThisChat) {
+        addMessageIfNotExists(msg);
+        setTimeout(scrollToBottom, 0);
+      }
+    });
+
+    // Подтверждение отправки нашего сообщения (и сохранения в БД)
+    s.on("message:sent", (msg) => {
+      addMessageIfNotExists(msg);
+
+      fetchConversations();
+
+      // если это был новый диалог — снимаем флаг
+      const conv = activeConvRef.current;
+      if (conv?.isNew) {
+        setActiveConversation((prev) => ({ ...prev, isNew: false }));
+      }
+
+      setTimeout(scrollToBottom, 0);
+    });
+
+    s.on("message:error", (e) => {
+      console.log("WS message:error", e);
+      alert("Не удалось отправить сообщение: " + (e?.error || "WS error"));
+    });
+
+    return () => {
+      s.disconnect();
+    };
   }, []);
 
   // -------- conversation actions --------
@@ -160,21 +243,26 @@ function Chat({ user }) {
     if (!newMessage.trim() || !user || !activeConversation?.user?.id) return;
 
     const receiverId = activeConversation.user.id;
+    const text = newMessage.trim();
 
     try {
-      const response = await api.post("/api/messages", {
-        receiverId,
-        text: newMessage.trim(),
-      });
+      const socket = socketRef.current;
 
-      // добавляем отправленное сообщение локально
-      setMessages((prev) => [...prev, response.data]);
+      // Если WS подключен — отправляем через WS
+      if (socket && socket.connected) {
+        socket.emit("message:send", { receiverId, text });
+        setNewMessage("");
+        return;
+      }
+
+      // Фоллбэк: если WS временно не подключён — отправим по HTTP
+      const response = await api.post("/api/messages", { receiverId, text });
+
+      addMessageIfNotExists(response.data);
       setNewMessage("");
 
-      // обновляем список диалогов (чтобы lastMessage подтянулся)
       await fetchConversations();
 
-      // если это был новый диалог — снимаем флаг
       if (activeConversation?.isNew) {
         setActiveConversation((prev) => ({ ...prev, isNew: false }));
       }
@@ -236,9 +324,7 @@ function Chat({ user }) {
                 role="button"
                 tabIndex={0}
               >
-                <div className="conversation-avatar">
-                  {initials(conv.user)}
-                </div>
+                <div className="conversation-avatar">{initials(conv.user)}</div>
 
                 <div className="conversation-info">
                   <div className="conversation-header">
@@ -309,12 +395,9 @@ function Chat({ user }) {
                 ))
               ) : (
                 <div className="no-messages">
-                  <p>
-                    {activeConversation.isNew ? "Начните разговор" : "Нет сообщений"}
-                  </p>
+                  <p>{activeConversation.isNew ? "Начните разговор" : "Нет сообщений"}</p>
                 </div>
               )}
-
               <div ref={messagesEndRef} />
             </div>
 

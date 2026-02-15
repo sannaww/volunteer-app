@@ -200,4 +200,14 @@ app.use(
   })
 );
 
+// ✅ Proxy → Socket.IO (applications-service 5003)
+app.use(
+  "/socket.io",
+  createProxyMiddleware({
+    target: "http://localhost:5003",
+    changeOrigin: true,
+    ws: true, // 🔥 вот это включает проксирование WebSocket upgrade
+  })
+);
+
 module.exports = app;
