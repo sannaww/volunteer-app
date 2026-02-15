@@ -6,9 +6,15 @@ async function register(req, res) {
     const user = await authService.registerUser(req.body);
     res.status(201).json(user);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    // ✅ если пользователь уже существует — 409
+    const msg = String(error.message || "");
+    if (msg.toLowerCase().includes("уже существует")) {
+      return res.status(409).json({ message: error.message });
+    }
+    return res.status(400).json({ message: error.message });
   }
 }
+
 
 /**POST /api/auth/login*/
 async function login(req, res) {
@@ -62,11 +68,23 @@ async function getUserById(req, res) {
     res.status(500).json({ message: error.message });
   }
 }
+/** DELETE /api/auth/account */
+async function deleteAccount(req, res) {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    const result = await authService.deleteAccount(token);
+    return res.json(result);
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+}
+
 
 module.exports = {
   register,
   login,
   getMe,
   updateProfile,
-  getUserById
+  getUserById,
+  deleteAccount,
 };

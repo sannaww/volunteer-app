@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 
-import api from "./api/client"; // ✅ используем твой единый клиент (с токеном)
+import api from "./api/client";
 
 import Navbar from "./components/Navbar";
 import ProjectList from "./components/ProjectList";
@@ -15,19 +15,38 @@ import EditProject from "./components/EditProject";
 import Chat from "./components/Chat";
 import AdminPanel from "./components/AdminPanel";
 import Favorites from "./components/Favorites";
+import OrganizerCalendar from "./components/OrganizerCalendar";
 
 import "./App.css";
 
+// ✅ защищённый доступ: если нет user -> /login, но запоминаем куда хотели попасть
 function RequireAuth({ user, loading, children }) {
+  const location = useLocation();
+
   if (loading) return <div className="app-loading">Загрузка приложения...</div>;
-  if (!user) return <Navigate to="/login" replace />;
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
+
   return children;
 }
 
+// ✅ доступ по ролям: если нет user -> /login (и запоминаем from)
+// если роль не подходит -> на главную
 function RequireRole({ user, loading, roles = [], children }) {
+  const location = useLocation();
+
   if (loading) return <div className="app-loading">Загрузка приложения...</div>;
-  if (!user) return <Navigate to="/login" replace />;
-  if (!roles.includes(user.role)) return <Navigate to="/" replace />;
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
+
+  if (!roles.includes(user.role)) {
+    return <Navigate to="/" replace />;
+  }
+
   return children;
 }
 
@@ -53,7 +72,7 @@ function App() {
           try {
             setUser(JSON.parse(savedUser));
           } catch {
-            // игнор
+            // ignore
           }
         }
 
@@ -62,7 +81,6 @@ function App() {
         setUser(res.data);
         localStorage.setItem("user", JSON.stringify(res.data));
       } catch (error) {
-        // токен битый/просрочен — чистим
         console.error("Ошибка инициализации пользователя:", error);
         localStorage.removeItem("token");
         localStorage.removeItem("user");
@@ -73,19 +91,6 @@ function App() {
     };
 
     init();
-
-    const handleBeforeUnload = (e) => {
-      const unsavedChanges = localStorage.getItem("unsavedChanges");
-      if (unsavedChanges) {
-        e.preventDefault();
-        e.returnValue =
-          "У вас есть несохраненные изменения. Вы уверены, что хотите уйти?";
-        return e.returnValue;
-      }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
   const handleLogin = (userData) => {
@@ -117,11 +122,21 @@ function App() {
             <Route path="/register" element={<Register onLogin={handleLogin} />} />
             <Route path="/login" element={<Login onLogin={handleLogin} />} />
 
+            {/* ✅ Organizer Calendar — ВАЖНО: ДО fallback */}
+            <Route
+              path="/organizer/calendar"
+              element={
+                <RequireRole user={user} loading={appLoading} roles={["organizer", "admin"]}>
+                  <OrganizerCalendar />
+                </RequireRole>
+              }
+            />
+
             {/* Organizer */}
             <Route
               path="/create-project"
               element={
-                <RequireRole user={user} loading={appLoading} roles={["organizer"]}>
+                <RequireRole user={user} loading={appLoading} roles={["organizer", "admin"]}>
                   <CreateProject user={user} />
                 </RequireRole>
               }
@@ -130,7 +145,7 @@ function App() {
             <Route
               path="/project-applications/:projectId"
               element={
-                <RequireRole user={user} loading={appLoading} roles={["organizer"]}>
+                <RequireRole user={user} loading={appLoading} roles={["organizer", "admin"]}>
                   <ProjectApplications user={user} />
                 </RequireRole>
               }
@@ -139,7 +154,7 @@ function App() {
             <Route
               path="/edit-project/:id"
               element={
-                <RequireRole user={user} loading={appLoading} roles={["organizer"]}>
+                <RequireRole user={user} loading={appLoading} roles={["organizer", "admin"]}>
                   <EditProject user={user} />
                 </RequireRole>
               }
@@ -154,7 +169,15 @@ function App() {
                 </RequireRole>
               }
             />
-            <Route path="/favorites" element={<Favorites />} />
+
+            <Route
+              path="/favorites"
+              element={
+                <RequireRole user={user} loading={appLoading} roles={["volunteer"]}>
+                  <Favorites />
+                </RequireRole>
+              }
+            />
 
             {/* Admin */}
             <Route
@@ -187,7 +210,6 @@ function App() {
 
             {/* fallback — всегда последним */}
             <Route path="*" element={<Navigate to="/" replace />} />
-
           </Routes>
         </main>
       </div>

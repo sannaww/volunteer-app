@@ -10,6 +10,33 @@ function getUserFromHeaders(req) {
   };
 }
 
+function parseDateOrNull(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+function validateDatesPayload(data) {
+  // если дат нет — ок
+  if (data.startDate === undefined && data.endDate === undefined) return;
+
+  const start = parseDateOrNull(data.startDate);
+  const end = parseDateOrNull(data.endDate);
+
+  // если один есть, другой нет — ошибка
+  if ((start && !end) || (!start && end)) {
+    throw new Error("Нужно указать обе даты: startDate и endDate");
+  }
+
+  // если обе пустые/не переданы — ок
+  if (!start && !end) return;
+
+  if (start > end) {
+    throw new Error("startDate не может быть позже endDate");
+  }
+}
+
 exports.getProjects = async (req, res) => {
   try {
     const projects = await projectsService.getAllProjects(req.query);
@@ -52,6 +79,12 @@ exports.createProject = async (req, res) => {
       payload.status = 'DRAFT';
     }
 
+    try {
+      validateDatesPayload(payload);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
+    }
+
     const created = await projectsService.createProject(payload);
     res.status(201).json(created);
   } catch (error) {
@@ -79,6 +112,12 @@ exports.updateProject = async (req, res) => {
     const updateData = { ...req.body };
     if (role !== 'admin' && updateData.status === 'ACTIVE') {
       updateData.status = existing.status; // игнорируем попытку
+    }
+    
+    try {
+      validateDatesPayload(updateData);
+    } catch (e) {
+      return res.status(400).json({ error: e.message });
     }
 
     const updated = await projectsService.updateProject(id, updateData);
@@ -108,5 +147,47 @@ exports.deleteProject = async (req, res) => {
   } catch (error) {
     console.error('deleteProject error:', error);
     res.status(500).json({ error: 'Ошибка удаления проекта' });
+  }
+};
+
+// Календарь мероприятий организатора
+// GET /organizer/calendar?month=YYYY-MM
+exports.getOrganizerCalendar = async (req, res) => {
+  try {
+    const { userId, role } = getUserFromHeaders(req);
+
+    if (!userId) return res.status(401).json({ error: "Требуется авторизация" });
+    if (!["organizer", "admin"].includes(role)) {
+      return res.status(403).json({ error: "Недостаточно прав" });
+    }
+
+    const month = req.query.month; // "2026-02"
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ error: "Параметр month должен быть в формате YYYY-MM" });
+    }
+
+    const [year, mon] = month.split("-").map(Number);
+
+    // Границы месяца (локально, без UTC — для UI так проще)
+    const start = new Date(year, mon - 1, 1, 0, 0, 0);
+    const end = new Date(year, mon, 1, 0, 0, 0); // 1-е число следующего месяца
+
+    // Берём проекты организатора, которые пересекают месяц
+    // startDate < end && endDate >= start
+    const projects = await projectsService.getOrganizerProjectsForCalendar({
+      organizerId: userId,
+      start,
+      end,
+    });
+
+    return res.json({
+      month,
+      range: { start, end },
+      projects,
+    });
+  } catch (error) {
+    console.error("getOrganizerCalendar error:", error);
+    res.status(500).json({ error: "Ошибка получения календаря",
+    details: error.message, });
   }
 };

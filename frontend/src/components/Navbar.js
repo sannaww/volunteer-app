@@ -13,11 +13,11 @@ function Navbar({ user, onLogout }) {
         {user && (
           <div className="user-welcome-nav">
             Привет, {user.firstName}!
-  {user?.role === "volunteer" && typeof user.points === "number" && (
-    <span style={{ marginLeft: 10 }}>
-      ⭐ {user.points}
-    </span>
-  )}
+            {user?.role === "volunteer" && typeof user.points === "number" && (
+              <span style={{ marginLeft: 10 }}>
+                ⭐ {user.points}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -26,43 +26,51 @@ function Navbar({ user, onLogout }) {
         <Link to="/">Все проекты</Link>
 
         {user ? (
-  <>
-    {/* organizer */}
-    {user.role === 'organizer' && (
-      <Link to="/create-project">Создать проект</Link>
-    )}
+          <>
+            {/* organizer */}
+            {user.role === 'organizer' && (
+              <>
+                <Link to="/create-project">Создать проект</Link>
+                <Link to="/organizer/calendar">Календарь</Link>
+              </>
+            )}
 
-    {/* volunteer */}
-    {user.role === 'volunteer' && (
-      <Link to="/favorites">Избранное</Link>
-    )}
+            {/* admin тоже может видеть календарь */}
+            {user.role === 'admin' && (
+              <Link to="/organizer/calendar">Календарь</Link>
+            )}
 
-    {/* volunteer */}
-    {user.role === 'volunteer' && (
-      <Link to="/my-applications">Мои заявки</Link>
-    )}
+            {/* volunteer */}
+            {user.role === 'volunteer' && (
+              <Link to="/favorites">Избранное</Link>
+            )}
 
-    {/* admin - пока без отдельных пунктов */}
-    {user?.role === "admin" && (
-  <Link to="/admin" className="nav-link">
-    Админ
-  </Link>
-)}
+            {/* volunteer */}
+            {user.role === 'volunteer' && (
+              <Link to="/my-applications">Мои заявки</Link>
+            )}
 
-    <Link to="/profile">Личный кабинет</Link>
-    <Link to="/chat">💬 Сообщения</Link>
+            {/* admin */}
+            {user?.role === "admin" && (
+              <Link to="/admin" className="nav-link">
+                Админ
+              </Link>
+            )}
 
-    <button onClick={onLogout} className="logout-btn">
-      Выйти
-    </button>
-  </>
-) : (
-  <>
-    <Link to="/">Все проекты</Link>
-    <Link to="/login">Войти</Link>
-    <Link to="/register">Регистрация</Link>
-  </>
-)}
+            <Link to="/profile">Личный кабинет</Link>
+            <Link to="/chat">💬 Сообщения</Link>
+
+            <button onClick={onLogout} className="logout-btn">
+              Выйти
+            </button>
+          </>
+        ) : (
+          <>
+            <Link to="/">Все проекты</Link>
+            <Link to="/login">Войти</Link>
+            <Link to="/register">Регистрация</Link>
+          </>
+        )}
       </div>
     </nav>
   );

@@ -1,41 +1,90 @@
-import React, { useState } from 'react';
-import axios from 'axios';
-import { useNavigate, Link } from 'react-router-dom';
-import './Auth.css';
+import React, { useState } from "react";
+import { useNavigate, Link } from "react-router-dom";
+import api from "../api/client";
+import "./Auth.css";
+
 function Register() {
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    role: 'volunteer'  });
-  const [message, setMessage] = useState('');
+    firstName: "",
+    lastName: "",
+    email: "",
+    password: "",
+    role: "volunteer",
+    contactInfo: "",
+  });
+
+  const [message, setMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
+
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value    });  };
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const getNiceError = (err) => {
+    const status = err?.response?.status;
+    const msg = err?.response?.data?.message || err?.response?.data?.error || "";
+
+    // корректное сообщение для повторной регистрации
+    if (status === 409) return "Пользователь с такими данными уже есть";
+    if (String(msg).toLowerCase().includes("уже существует")) {
+      return "Пользователь с такими данными уже есть";
+    }
+
+    return msg || "Ошибка регистрации";
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setMessage('');
+    if (loading) return;
+
+    setMessage("");
+    setIsSuccess(false);
+    setLoading(true);
+
     try {
-      const response = await axios.post('http://localhost:5000/api/auth/register', formData);      
-      if (response.data.message) {
-        setMessage(response.data.message);
-        setIsSuccess(true);      }     
-      // Не перенаправляем автоматически, пока email не подтвержден
-    } catch (error) {
-      setMessage(error.response?.data?.error || 'Ошибка при регистрации');
-      setIsSuccess(false);    }  };
+      const payload = {
+        firstName: formData.firstName.trim(),
+        lastName: formData.lastName.trim(),
+        email: formData.email.trim(),
+        password: formData.password,
+        role: formData.role, // volunteer | organizer
+        contactInfo: formData.contactInfo.trim() || null,
+      };
+
+      await api.post("/api/auth/register", payload);
+
+      setIsSuccess(true);
+      setMessage("Регистрация успешна! Перенаправляем на вход...");
+      // ✅ сохраняем, чтобы Login подтянул поля
+      sessionStorage.setItem("prefillLoginEmail", payload.email);
+
+      // ✅ Вариант: на страницу "Войти"
+      navigate("/login");
+
+      // ✅ Если хочешь на главную — вместо этого:
+      // navigate("/");
+    } catch (err) {
+      setIsSuccess(false);
+      setMessage(getNiceError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="auth-container">
       <form className="auth-form" onSubmit={handleSubmit}>
-        <h2>Регистрация</h2>      
+        <h2>Регистрация</h2>
+
         {message && (
-          <div className={`message ${isSuccess ? 'success' : 'error'}`}>
+          <div className={`message ${isSuccess ? "success" : "error"}`}>
             {message}
-          </div>        )}
+          </div>
+        )}
+
         <div className="form-group">
           <label>Имя:</label>
           <input
@@ -44,8 +93,10 @@ function Register() {
             value={formData.firstName}
             onChange={handleChange}
             required
+            disabled={loading}
           />
         </div>
+
         <div className="form-group">
           <label>Фамилия:</label>
           <input
@@ -53,8 +104,11 @@ function Register() {
             name="lastName"
             value={formData.lastName}
             onChange={handleChange}
-            required          />
+            required
+            disabled={loading}
+          />
         </div>
+
         <div className="form-group">
           <label>Email:</label>
           <input
@@ -62,8 +116,12 @@ function Register() {
             name="email"
             value={formData.email}
             onChange={handleChange}
-            required          />
+            required
+            disabled={loading}
+            autoComplete="email"
+          />
         </div>
+
         <div className="form-group">
           <label>Пароль:</label>
           <input
@@ -72,19 +130,47 @@ function Register() {
             value={formData.password}
             onChange={handleChange}
             required
-            minLength="6"          />
+            minLength={6}
+            disabled={loading}
+            autoComplete="new-password"
+          />
         </div>
+
+        <div className="form-group">
+          <label>Контакт (необязательно):</label>
+          <input
+            type="text"
+            name="contactInfo"
+            value={formData.contactInfo}
+            onChange={handleChange}
+            disabled={loading}
+            placeholder="+79991234567 или email"
+          />
+        </div>
+
         <div className="form-group">
           <label>Роль:</label>
-          <select name="role" value={formData.role} onChange={handleChange}>
+          <select
+            name="role"
+            value={formData.role}
+            onChange={handleChange}
+            disabled={loading}
+          >
             <option value="volunteer">Волонтер</option>
             <option value="organizer">Организатор</option>
           </select>
         </div>
-        <button type="submit" className="auth-btn">Зарегистрироваться</button>     
+
+        <button type="submit" className="auth-btn" disabled={loading}>
+          {loading ? "Регистрация..." : "Зарегистрироваться"}
+        </button>
+
         <p className="auth-link">
           Уже есть аккаунт? <Link to="/login">Войти</Link>
         </p>
       </form>
-    </div>  );}
+    </div>
+  );
+}
+
 export default Register;

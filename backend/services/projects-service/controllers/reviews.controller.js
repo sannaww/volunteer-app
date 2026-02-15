@@ -25,8 +25,91 @@ async function recalcProjectRating(projectId) {
   return { avgRating, reviewsCount };
 }
 
+// ✅ GET /reviews/my  (Мои отзывы)
+exports.getMyReviews = async (req, res) => {
+    console.log("HIT getMyReviews", req.originalUrl);
+  try {
+    const userId = req.headers["x-user-id"];
+    const userRole = (req.headers["x-user-role"] || "").toLowerCase();
+
+    if (!userId) return res.status(401).json({ message: "Missing x-user-id" });
+
+    // если хочешь строго только волонтёру — оставь проверку
+    if (userRole && userRole !== "volunteer") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const reviews = await prisma.review.findMany({
+      where: { authorId: String(userId) },
+      orderBy: { createdAt: "desc" },
+      include: {
+        project: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            startDate: true,
+            endDate: true,
+            avgRating: true,
+            reviewsCount: true,
+          },
+        },
+      },
+    });
+
+    return res.json(reviews);
+  } catch (err) {
+    console.error("getMyReviews error:", err);
+    return res.status(500).json({ message: "Server error", details: err.message });
+  }
+};
+
+// ✅ DELETE /reviews/:id  (Удалить мой отзыв)
+exports.deleteMyReview = async (req, res) => {
+  try {
+    const userId = req.headers["x-user-id"];
+    const userRole = (req.headers["x-user-role"] || "").toLowerCase();
+    const reviewId = req.params.id; // String cuid()
+
+    if (!userId) return res.status(401).json({ message: "Missing x-user-id" });
+
+    // если хочешь строго только волонтёру — оставь проверку
+    if (userRole && userRole !== "volunteer") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (!reviewId) return res.status(400).json({ message: "Invalid review id" });
+
+    const review = await prisma.review.findUnique({
+      where: { id: reviewId },
+      select: { id: true, authorId: true, projectId: true },
+    });
+
+    if (!review) return res.status(404).json({ message: "Review not found" });
+
+    if (review.authorId !== String(userId)) {
+      return res.status(403).json({ message: "Вы можете удалить только свой отзыв" });
+    }
+
+    await prisma.review.delete({ where: { id: reviewId } });
+
+    // пересчитываем рейтинг проекта
+    const stats = await recalcProjectRating(review.projectId);
+
+    return res.json({
+      message: "Review deleted",
+      projectId: review.projectId,
+      projectStats: stats,
+    });
+  } catch (err) {
+    console.error("deleteMyReview error:", err);
+    return res.status(500).json({ message: "Server error", details: err.message });
+  }
+};
+
 // GET /reviews/:projectId
 exports.getReviewsByProject = async (req, res) => {
+    console.log("HIT getReviewsByProject", req.params.projectId);
   try {
     const projectId = normalizeProjectId(req.params.projectId);
 
@@ -65,34 +148,34 @@ exports.createReview = async (req, res) => {
     if (!project) return res.status(404).json({ message: "Project not found" });
 
     // ✅ Проверяем: есть ли APPROVED заявка у пользователя на этот проект
-const userIdInt = Number(userId); // x-user-id приходит строкой, приводим к числу
-if (Number.isNaN(userIdInt)) {
-  return res.status(400).json({ message: "Некорректный userId" });
-  
-}
-if (project.status === "CANCELLED") {
-  return res.status(403).json({ message: "Нельзя оставлять отзывы на отменённые проекты" });
-}
+    const userIdInt = Number(userId); // x-user-id приходит строкой, приводим к числу
+    if (Number.isNaN(userIdInt)) {
+      return res.status(400).json({ message: "Некорректный userId" });
+    }
 
-const checkUrl = `${APPLICATIONS_SERVICE_URL}/internal/check-approved?userId=${userIdInt}&projectId=${projectId}`;
+    if (project.status === "CANCELLED") {
+      return res.status(403).json({ message: "Нельзя оставлять отзывы на отменённые проекты" });
+    }
 
-const checkRes = await fetch(checkUrl);
+    const checkUrl = `${APPLICATIONS_SERVICE_URL}/internal/check-approved?userId=${userIdInt}&projectId=${projectId}`;
 
-if (!checkRes.ok) {
-  const text = await checkRes.text();
-  return res.status(502).json({
-    message: "Ошибка проверки участия (applications-service)",
-    details: text,
-  });
-}
+    const checkRes = await fetch(checkUrl);
 
-const checkData = await checkRes.json();
+    if (!checkRes.ok) {
+      const text = await checkRes.text();
+      return res.status(502).json({
+        message: "Ошибка проверки участия (applications-service)",
+        details: text,
+      });
+    }
 
-if (!checkData.canReview) {
-  return res.status(403).json({
-    message: "Оставить отзыв можно только после одобрения заявки (APPROVED)",
-  });
-}
+    const checkData = await checkRes.json();
+
+    if (!checkData.canReview) {
+      return res.status(403).json({
+        message: "Оставить отзыв можно только после одобрения заявки (APPROVED)",
+      });
+    }
 
     // создаём отзыв (один на проект на пользователя)
     const review = await prisma.review.create({

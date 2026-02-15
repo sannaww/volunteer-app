@@ -6,6 +6,8 @@ const projectsController = require('../controllers/projects.controller');
 // Получить все проекты
 router.get('/', projectsController.getProjects);
 
+router.get("/organizer/calendar", projectsController.getOrganizerCalendar);
+
 // Получить проект по ID
 router.get('/:id', projectsController.getProject);
 

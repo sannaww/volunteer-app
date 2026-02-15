@@ -1,39 +1,85 @@
-const { PrismaClient } = require('@prisma/client');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 const prisma = new PrismaClient();
-const JWT_SECRET = 'your-secret-key';
+const JWT_SECRET = "your-secret-key";
 
-/**
- * Регистрация пользователя
- */
+// helpers
+function normalizeEmail(v) {
+  return String(v || "").trim().toLowerCase();
+}
+
+function normalizeName(v) {
+  const s = String(v || "").trim();
+  return s.length ? s : null;
+}
+
+function normalizeRole(v) {
+  const role = String(v || "volunteer").trim().toLowerCase();
+  return role;
+}
+
+function normalizePhone(v) {
+  // оставляем только цифры и плюс
+  const raw = String(v || "").trim();
+  const cleaned = raw.replace(/[^\d+]/g, ""); // убираем пробелы, скобки, дефисы
+  return cleaned;
+}
+
+function isValidEmail(v) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || "").trim());
+}
+
+function isValidRuPhonePlus7(v) {
+  const phone = normalizePhone(v);
+  return /^\+7\d{10}$/.test(phone);
+}
+
+// Регистрация пользователя
 async function registerUser(data) {
-  const { email, password, firstName, lastName, role, contactInfo } = data;
+  // принимаем и camelCase, и варианты из Postman
+  const email = normalizeEmail(data.email);
+  const password = data.password;
+
+  const firstName =
+    normalizeName(data.firstName) ?? normalizeName(data.firstname) ?? normalizeName(data.first_name);
+  const lastName =
+    normalizeName(data.lastName) ?? normalizeName(data.lastname) ?? normalizeName(data.last_name);
+
+  const role = normalizeRole(data.role);
+  const contactInfo = data.contactInfo ?? data.contact ?? data.phone ?? null;
 
   // Проверка обязательных полей
   if (!email || !password || !firstName || !lastName) {
-    throw new Error('Все обязательные поля должны быть заполнены');
+    throw new Error("Все обязательные поля должны быть заполнены");
+  }
+
+  // запрет регистрации админа публично
+  if (role === "admin") {
+    throw new Error("Нельзя зарегистрировать администратора через форму регистрации");
+  }
+
+  // можно разрешить только эти роли
+  if (!["volunteer", "organizer"].includes(role)) {
+    throw new Error("Некорректная роль. Разрешены: volunteer, organizer");
   }
 
   // Проверяем, существует ли пользователь
   const existingUser = await prisma.user.findUnique({
-    where: { email }
+    where: { email },
   });
 
   if (existingUser) {
-    throw new Error('Пользователь с таким email уже существует');
+    throw new Error("Пользователь с таким email уже существует");
   }
 
   // Проверка contactInfo (если есть)
   if (contactInfo) {
-    const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactInfo);
-    const isPhone = /^\+7\d{10}$/.test(contactInfo.replace(/\s|\(|\)|-/g, ''));
-
-    if (!isEmail && !isPhone) {
-      throw new Error(
-        'Контактная информация должна быть email или телефоном +79991234567'
-      );
+    const ci = String(contactInfo).trim();
+    const ok = isValidEmail(ci) || isValidRuPhonePlus7(ci);
+    if (!ok) {
+      throw new Error("Контактная информация должна быть email или телефоном +79991234567");
     }
   }
 
@@ -47,68 +93,67 @@ async function registerUser(data) {
       password: hashedPassword,
       firstName,
       lastName,
-      role: role || 'volunteer',
+      role, // уже нормализованная
       emailVerified: true,
-      emailVerificationToken: null
-    }
+      emailVerificationToken: null,
+      // если в Prisma есть phone и хочешь сохранить телефон из contactInfo:
+      // phone: isValidRuPhonePlus7(contactInfo) ? normalizePhone(contactInfo) : null,
+    },
   });
 
   // Убираем пароль из ответа
-  const { password: _, ...userWithoutPassword } = user;
-
+  const { password: _pwd, ...userWithoutPassword } = user;
   return userWithoutPassword;
 }
 
-/**
- * Логин пользователя
- */
+// Логин пользователя
 async function loginUser(email, password) {
-  if (!email || !password) {
-    throw new Error('Email и пароль обязательны');
+  const emailNorm = normalizeEmail(email);
+
+  if (!emailNorm || !password) {
+    throw new Error("Email и пароль обязательны");
   }
 
   const user = await prisma.user.findUnique({
-    where: { email }
+    where: { email: emailNorm },
   });
 
   if (!user) {
-    throw new Error('Пользователь не найден');
+    throw new Error("Пользователь не найден");
   }
 
   // ✅ ПРОВЕРКА БЛОКИРОВКИ
   if (user.isBlocked) {
-    throw new Error('Ваш аккаунт заблокирован администратором');
+    throw new Error("Ваш аккаунт заблокирован администратором");
   }
 
   const isPasswordValid = await bcrypt.compare(password, user.password);
   if (!isPasswordValid) {
-    throw new Error('Неверный пароль');
+    throw new Error("Неверный пароль");
   }
 
   const token = jwt.sign(
     {
       userId: user.id,
       email: user.email,
-      role: user.role
+      role: user.role,
     },
     JWT_SECRET,
-    { expiresIn: '24h' }
+    { expiresIn: "24h" }
   );
 
-  const { password: _, ...userWithoutPassword } = user;
+  const { password: _pwd, ...userWithoutPassword } = user;
 
   return {
     user: userWithoutPassword,
-    token
+    token,
   };
 }
 
-/**
- * Получить текущего пользователя по токену
- */
+// Получить текущего пользователя по токену
 async function getMe(token) {
   if (!token) {
-    throw new Error('Токен не предоставлен');
+    throw new Error("Токен не предоставлен");
   }
 
   const decoded = jwt.verify(token, JWT_SECRET);
@@ -127,42 +172,42 @@ async function getMe(token) {
       bio: true,
       avatarUrl: true,
       createdAt: true,
-      points: true
-    }
+      points: true,
+    },
   });
 
   if (!user) {
-    throw new Error('Пользователь не найден');
+    throw new Error("Пользователь не найден");
   }
 
   return user;
 }
 
 async function updateProfile(token, data) {
-  if (!token) throw new Error('Требуется авторизация');
+  if (!token) throw new Error("Требуется авторизация");
 
   let decoded;
   try {
     decoded = jwt.verify(token, JWT_SECRET);
   } catch {
-    throw new Error('Недействительный токен');
+    throw new Error("Недействительный токен");
   }
 
   const { firstName, lastName, phone, skills, interests, bio } = data;
 
   if (!firstName || !lastName) {
-    throw new Error('Имя и фамилия обязательны');
+    throw new Error("Имя и фамилия обязательны");
   }
 
   const updated = await prisma.user.update({
     where: { id: decoded.userId },
     data: {
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      phone: phone ? phone.trim() : null,
-      skills: skills ? skills.trim() : null,
-      interests: interests ? interests.trim() : null,
-      bio: bio ? bio.trim() : null,
+      firstName: String(firstName).trim(),
+      lastName: String(lastName).trim(),
+      phone: phone ? String(phone).trim() : null,
+      skills: skills ? String(skills).trim() : null,
+      interests: interests ? String(interests).trim() : null,
+      bio: bio ? String(bio).trim() : null,
     },
     select: {
       id: true,
@@ -189,9 +234,29 @@ async function getUserById(userId) {
       id: true,
       firstName: true,
       lastName: true,
-      role: true
-    }
+      role: true,
+    },
   });
+}
+async function deleteAccount(token) {
+  if (!token) throw new Error("Требуется авторизация");
+
+  let decoded;
+  try {
+    decoded = jwt.verify(token, JWT_SECRET);
+  } catch {
+    throw new Error("Недействительный токен");
+  }
+
+  // важно: удаляем по id из токена
+  const userId = decoded.userId;
+
+  // если у тебя есть зависимости (favorites/reviews/applications) — лучше делать soft delete.
+  // но для диплома можно удалить user, если FK позволяют.
+
+  await prisma.user.delete({ where: { id: userId } });
+
+  return { message: "Аккаунт удалён" };
 }
 
 module.exports = {
@@ -199,6 +264,6 @@ module.exports = {
   loginUser,
   getMe,
   updateProfile,
-  getUserById
+  getUserById,
+  deleteAccount
 };
-

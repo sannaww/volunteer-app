@@ -177,3 +177,27 @@ exports.deleteProject = async (id) => {
     where: { id: parseInt(id, 10) }
   });
 };
+
+exports.getOrganizerProjectsForCalendar = async ({ organizerId, start, end }) => {
+  return prisma.project.findMany({
+    where: {
+      createdBy: organizerId,
+
+      // ✅ берём только те, у кого даты заполнены
+      startDate: { not: null, lt: end },
+      endDate: { not: null, gte: start },
+    },
+    orderBy: { startDate: "asc" },
+    select: {
+      id: true,
+      title: true,
+      status: true,
+      startDate: true,
+      endDate: true,
+      location: true,
+      projectType: true,
+      volunteersRequired: true,
+      contactInfo: true,
+    },
+  });
+};
