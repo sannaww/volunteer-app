@@ -37,7 +37,7 @@ function EditProject({ user }) {
 
   const fetchProject = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const response = await axios.get(`http://localhost:5000/api/projects/${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -77,7 +77,7 @@ function EditProject({ user }) {
     setSaving(true);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const dataToSend = {
         ...formData,
         volunteersRequired: parseInt(formData.volunteersRequired),

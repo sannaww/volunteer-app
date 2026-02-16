@@ -304,7 +304,7 @@ const [reviewsError, setReviewsError] = useState("");
       role: project.creator.role || 'organizer'
     };
 
-    localStorage.setItem('selectedOrganizer', JSON.stringify(organizerInfo));
+    sessionStorage.setItem('selectedOrganizer', JSON.stringify(organizerInfo));
     window.location.href = '/chat';
   };
 

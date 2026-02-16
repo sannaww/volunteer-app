@@ -146,4 +146,30 @@ router.post('/', async (req, res) => {
   res.status(201).json({ ...msg, senderRole });
 });
 
+// DELETE /messages/conversation/:partnerId
+// Удаляет весь диалог (все сообщения между userId и partnerId)
+router.delete("/conversation/:partnerId", async (req, res) => {
+  try {
+    const userId = Number(req.headers["x-user-id"]);
+    const partnerId = Number(req.params.partnerId);
+
+    if (!userId) return res.status(401).json({ message: "No x-user-id header" });
+    if (!partnerId) return res.status(400).json({ message: "partnerId required" });
+
+    const result = await prisma.message.deleteMany({
+      where: {
+        OR: [
+          { senderId: userId, receiverId: partnerId },
+          { senderId: partnerId, receiverId: userId },
+        ],
+      },
+    });
+
+    res.json({ deleted: result.count });
+  } catch (e) {
+    console.error("DELETE /messages/conversation/:partnerId error", e);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 module.exports = router;

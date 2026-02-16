@@ -23,7 +23,7 @@ function ProjectApplications({ user }) {
 
   const fetchApplications = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
 
       const response = await axios.get(
         `http://localhost:5000/api/applications/project/${projectId}`,
@@ -45,7 +45,7 @@ function ProjectApplications({ user }) {
 
   const handleApprove = async (applicationId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
 
       await axios.patch(
         `http://localhost:5000/api/applications/${applicationId}/approve`,
@@ -65,7 +65,7 @@ function ProjectApplications({ user }) {
 
   const handleReject = async (applicationId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
 
       await axios.patch(
         `http://localhost:5000/api/applications/${applicationId}/reject`,

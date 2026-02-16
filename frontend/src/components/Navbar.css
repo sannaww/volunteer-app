@@ -134,3 +134,18 @@
   font-size: 0.7rem;
   font-weight: bold;
 }
+
+.chat-link-with-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.nav-badge-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: red;
+  margin-left: 6px;
+  display: inline-block;
+}

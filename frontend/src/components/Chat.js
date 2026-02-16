@@ -13,16 +13,21 @@ function Chat({ user }) {
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
+  // pagination state
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const socketRef = useRef(null);
 
-  // refs to avoid stale closures inside socket callbacks
+  // refs to avoid stale closures in socket callbacks
   const userRef = useRef(user);
   const activeConvRef = useRef(activeConversation);
 
   const navigate = useNavigate();
 
-  // keep refs up-to-date
   useEffect(() => {
     userRef.current = user;
   }, [user]);
@@ -31,7 +36,7 @@ function Chat({ user }) {
     activeConvRef.current = activeConversation;
   }, [activeConversation]);
 
-  // -------- helpers (UI-safe) --------
+  // -------- helpers --------
   const displayName = (u) => {
     if (!u) return "Пользователь";
     if (u.firstName && u.lastName) return `${u.firstName} ${u.lastName}`;
@@ -76,6 +81,19 @@ function Chat({ user }) {
     });
   };
 
+  const updateMessageStatus = (messageId, patch) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, ...patch } : m))
+    );
+  };
+
+  const updateManyMessageStatus = (ids, patch) => {
+    const setIds = new Set(ids || []);
+    setMessages((prev) =>
+      prev.map((m) => (setIds.has(m.id) ? { ...m, ...patch } : m))
+    );
+  };
+
   // -------- data loading --------
   const fetchConversations = async () => {
     const currentUser = userRef.current;
@@ -91,23 +109,89 @@ function Chat({ user }) {
     }
   };
 
-  const fetchMessages = async () => {
+  /**
+   * initial load: last 50
+   * ВАЖНО: backend может возвращать:
+   * 1) { items, hasMore, nextCursor }  (пагинация)
+   * 2) [ ...messages ]                (старый формат без пагинации)
+   */
+  const fetchMessages = async (conv) => {
     const currentUser = userRef.current;
-    const conv = activeConvRef.current;
-
     if (!currentUser || !conv?.user?.id) return;
 
     try {
-      const response = await api.get(`/api/messages/conversation/${conv.user.id}`);
-      setMessages(response.data || []);
-      // небольшой таймаут, чтобы DOM успел отрендериться
+      const response = await api.get(
+        `/api/messages/conversation/${conv.user.id}?limit=50`
+      );
+
+      const data = response.data;
+
+      // ✅ поддерживаем оба формата ответа
+      const items = Array.isArray(data) ? data : data?.items || [];
+
+      setMessages(items);
+
+      // пагинация только если сервер отдает объект
+      setHasMore(!Array.isArray(data) && Boolean(data?.hasMore));
+      setNextCursor(!Array.isArray(data) ? data?.nextCursor || null : null);
+
       setTimeout(scrollToBottom, 0);
     } catch (error) {
       console.error("Ошибка при загрузке сообщений:", error);
-      // если новый диалог — отсутствие сообщений ок
-      if (!conv?.isNew) {
-        console.error("Ошибка загрузки существующего диалога");
+    }
+  };
+
+  // load older messages (prepend) using nextCursor
+  const loadMoreMessages = async () => {
+    const conv = activeConversation;
+    if (!conv?.user?.id) return;
+    if (!hasMore || !nextCursor || loadingMore) return;
+
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    try {
+      setLoadingMore(true);
+
+      // запоминаем высоту и позицию до подгрузки
+      const prevScrollHeight = container.scrollHeight;
+      const prevScrollTop = container.scrollTop;
+
+      const response = await api.get(
+        `/api/messages/conversation/${conv.user.id}?cursor=${nextCursor}&limit=50`
+      );
+
+      const data = response.data;
+
+      // ✅ поддерживаем оба формата ответа
+      const items = Array.isArray(data) ? data : data?.items || [];
+
+      if (items.length) {
+        setMessages((prev) => [...items, ...prev]);
       }
+
+      setHasMore(!Array.isArray(data) && Boolean(data?.hasMore));
+      setNextCursor(!Array.isArray(data) ? data?.nextCursor || null : null);
+
+      // сохраняем "визуальную" позицию: не прыгаем вниз
+      setTimeout(() => {
+        const newScrollHeight = container.scrollHeight;
+        container.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+      }, 0);
+    } catch (e) {
+      console.error("Ошибка при подгрузке истории:", e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  // onScroll: если дошли почти до верха — подгружаем старые
+  const handleScroll = () => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    if (container.scrollTop <= 80) {
+      loadMoreMessages();
     }
   };
 
@@ -118,17 +202,23 @@ function Chat({ user }) {
       return;
     }
     fetchConversations();
+
+      window.dispatchEvent(new Event("unread:update"));
   }, [user, navigate]);
 
   useEffect(() => {
-    if (activeConversation) {
-      fetchMessages();
-    }
+    if (!activeConversation) return;
+
+    setMessages([]);
+    setHasMore(false);
+    setNextCursor(null);
+
+    fetchMessages(activeConversation);
   }, [activeConversation]);
 
-  // Получаем organizer из localStorage (переход из карточки проекта)
+  // organizer из sessionStorage
   useEffect(() => {
-    const savedOrganizer = localStorage.getItem("selectedOrganizer");
+    const savedOrganizer = sessionStorage.getItem("selectedOrganizer");
     if (!savedOrganizer) return;
 
     try {
@@ -137,27 +227,36 @@ function Chat({ user }) {
     } catch (e) {
       console.error("Не удалось прочитать selectedOrganizer:", e);
     } finally {
-      localStorage.removeItem("selectedOrganizer");
+      sessionStorage.removeItem("selectedOrganizer");
     }
   }, []);
+
+  // ✅ function declaration (чтобы точно не было TDZ в socket callbacks)
+  function markConversationAsReadLocal(partnerId) {
+    setConversations((prev) =>
+      (prev || []).map((c) =>
+        c?.user?.id === partnerId ? { ...c, unreadCount: 0 } : c
+      )
+    );
+  
+  window.dispatchEvent(new Event("unread:update"));
+}
 
   // -------- Socket.IO connect (once) --------
   useEffect(() => {
     const s = createSocket();
     socketRef.current = s;
 
-    s.on("connect", () => console.log("WS connected", s.id));
-    s.on("connect_error", (e) => console.log("WS connect_error:", e.message));
+    const onConnect = () => console.log("WS connected", s.id);
+    const onConnectError = (e) => console.log("WS connect_error:", e.message);
 
-    // Получили новое сообщение
-    s.on("message:new", (msg) => {
+    const onNew = (msg) => {
       const currentUser = userRef.current;
       const conv = activeConvRef.current;
 
-      // обновим список диалогов (lastMessage/сортировка)
       fetchConversations();
 
-      // если диалог не выбран — просто обновили список и выходим
+      // если активный диалог не открыт — просто обновим список (unreadCount придет с сервера)
       if (!conv?.user?.id || !currentUser?.id) return;
 
       const partnerId = conv.user.id;
@@ -169,42 +268,85 @@ function Chat({ user }) {
       if (isForThisChat) {
         addMessageIfNotExists(msg);
         setTimeout(scrollToBottom, 0);
-      }
-    });
 
-    // Подтверждение отправки нашего сообщения (и сохранения в БД)
-    s.on("message:sent", (msg) => {
+        // раз чат открыт — отмечаем как прочитано
+        s.emit("conversation:read", { partnerId });
+        markConversationAsReadLocal(partnerId);
+        window.dispatchEvent(new Event("unread:update"));
+      }
+    };
+
+    const onSent = (msg) => {
       addMessageIfNotExists(msg);
-
       fetchConversations();
-
-      // если это был новый диалог — снимаем флаг
-      const conv = activeConvRef.current;
-      if (conv?.isNew) {
-        setActiveConversation((prev) => ({ ...prev, isNew: false }));
-      }
-
       setTimeout(scrollToBottom, 0);
-    });
+    };
 
-    s.on("message:error", (e) => {
+    const onDelivered = (payload) => {
+      if (!payload?.messageId) return;
+      updateMessageStatus(payload.messageId, { deliveredAt: payload.deliveredAt });
+    };
+
+    const onRead = (payload) => {
+      const ids = payload?.messageIds || [];
+      if (!ids.length) return;
+      updateManyMessageStatus(ids, { readAt: payload.readAt });
+    };
+
+    const onMsgError = (e) => {
       console.log("WS message:error", e);
       alert("Не удалось отправить сообщение: " + (e?.error || "WS error"));
-    });
+    };
+
+    s.on("connect", onConnect);
+    s.on("connect_error", onConnectError);
+    s.on("message:new", onNew);
+    s.on("message:sent", onSent);
+    s.on("message:delivered", onDelivered);
+    s.on("messages:read", onRead);
+    s.on("message:error", onMsgError);
 
     return () => {
+      s.off("connect", onConnect);
+      s.off("connect_error", onConnectError);
+      s.off("message:new", onNew);
+      s.off("message:sent", onSent);
+      s.off("message:delivered", onDelivered);
+      s.off("messages:read", onRead);
+      s.off("message:error", onMsgError);
       s.disconnect();
     };
   }, []);
 
+  // когда выбираем диалог — отмечаем как прочитано
+  useEffect(() => {
+    const conv = activeConversation;
+    const currentUser = user;
+
+    if (!conv?.user?.id || !currentUser?.id) return;
+
+    const partnerId = conv.user.id;
+
+    const sendRead = () => {
+      const s = socketRef.current;
+      if (!s || !s.connected) return false;
+      s.emit("conversation:read", { partnerId });
+      markConversationAsReadLocal(partnerId);
+      return true;
+    };
+
+    if (!sendRead()) {
+      setTimeout(() => sendRead(), 300);
+      setTimeout(() => sendRead(), 800);
+    }
+  }, [activeConversation, user]);
+
   // -------- conversation actions --------
   const handleSelectConversation = (conversation) => {
     setActiveConversation(conversation);
-    setMessages([]);
   };
 
   const handleNewConversation = (organizer) => {
-    // organizer должен быть объектом пользователя: { id, firstName, lastName, role }
     if (!organizer?.id) return;
 
     const existingConversation = conversations.find(
@@ -216,7 +358,6 @@ function Chat({ user }) {
       return;
     }
 
-    // Создаем временный объект диалога
     const newConversation = {
       user: {
         id: organizer.id,
@@ -233,7 +374,6 @@ function Chat({ user }) {
     };
 
     setActiveConversation(newConversation);
-    setMessages([]);
   };
 
   // -------- send message --------
@@ -248,25 +388,17 @@ function Chat({ user }) {
     try {
       const socket = socketRef.current;
 
-      // Если WS подключен — отправляем через WS
       if (socket && socket.connected) {
         socket.emit("message:send", { receiverId, text });
         setNewMessage("");
         return;
       }
 
-      // Фоллбэк: если WS временно не подключён — отправим по HTTP
-      const response = await api.post("/api/messages", { receiverId, text });
-
-      addMessageIfNotExists(response.data);
+      // fallback HTTP (на всякий случай)
+      await api.post("/api/messages", { receiverId, text });
       setNewMessage("");
-
+      await fetchMessages(activeConversation);
       await fetchConversations();
-
-      if (activeConversation?.isNew) {
-        setActiveConversation((prev) => ({ ...prev, isNew: false }));
-      }
-
       scrollToBottom();
     } catch (error) {
       console.error("Ошибка при отправке сообщения:", error);
@@ -279,7 +411,6 @@ function Chat({ user }) {
     }
   };
 
-  // -------- guards / states --------
   if (!user) {
     return (
       <div className="chat-error">
@@ -300,7 +431,39 @@ function Chat({ user }) {
     return <div className="chat-loading">Загрузка чата...</div>;
   }
 
-  // -------- render --------
+  const getStatusIcon = (m) => {
+    if (m.senderId !== user.id) return "";
+    if (m.readAt) return "✓✓";
+    if (m.deliveredAt) return "✓";
+    return "✓";
+  };
+
+  const handleDeleteActiveConversation = async () => {
+    const partnerId = activeConversation?.user?.id;
+    if (!partnerId) return;
+
+    const ok = window.confirm(
+      "Удалить диалог? Все сообщения будут удалены без восстановления."
+    );
+    if (!ok) return;
+
+    try {
+      await api.delete(`/api/messages/conversation/${partnerId}`);
+
+      // ✅ убрать из списка диалогов
+      setConversations((prev) =>
+        (prev || []).filter((c) => c?.user?.id !== partnerId)
+      );
+
+      // ✅ закрыть чат
+      setActiveConversation(null);
+      setMessages([]);
+    } catch (e) {
+      console.error("Ошибка удаления диалога:", e);
+      alert("Не удалось удалить диалог");
+    }
+  };
+
   return (
     <div className="chat-container">
       <div className="chat-sidebar">
@@ -328,9 +491,7 @@ function Chat({ user }) {
 
                 <div className="conversation-info">
                   <div className="conversation-header">
-                    <span className="conversation-name">
-                      {displayName(conv.user)}
-                    </span>
+                    <span className="conversation-name">{displayName(conv.user)}</span>
 
                     <span className="conversation-time">
                       {conv?.lastMessage?.createdAt
@@ -362,21 +523,37 @@ function Chat({ user }) {
       <div className="chat-main">
         {activeConversation ? (
           <>
-            <div className="chat-header">
+            <div className="chat-header chat-header-row">
               <div className="chat-partner-info">
                 <h4>{displayName(activeConversation.user)}</h4>
-
                 <span className="user-role">
                   {displayRole(activeConversation.user?.role)}
                 </span>
-
-                {activeConversation.isNew && (
-                  <span className="new-conversation-badge">Новый диалог</span>
-                )}
               </div>
+
+              <button
+                type="button"
+                className="chat-delete-btn"
+                onClick={handleDeleteActiveConversation}
+                title="Удалить диалог"
+              >
+                🗑️
+              </button>
             </div>
 
-            <div className="messages-container">
+            <div
+              className="messages-container"
+              ref={messagesContainerRef}
+              onScroll={handleScroll}
+            >
+              {hasMore && (
+                <div className="chat-load-more">
+                  {loadingMore
+                    ? "Загрузка..."
+                    : "Прокрутите вверх, чтобы загрузить еще"}
+                </div>
+              )}
+
               {messages.length > 0 ? (
                 messages.map((message) => (
                   <div
@@ -387,15 +564,22 @@ function Chat({ user }) {
                   >
                     <div className="message-content">
                       <p>{message.text}</p>
-                      <span className="message-time">
-                        {message.createdAt ? formatTime(message.createdAt) : ""}
-                      </span>
+
+                      <div className="message-meta">
+                        <span className="message-time">
+                          {message.createdAt ? formatTime(message.createdAt) : ""}
+                        </span>
+
+                        {message.senderId === user.id && (
+                          <span className="message-status">{getStatusIcon(message)}</span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))
               ) : (
                 <div className="no-messages">
-                  <p>{activeConversation.isNew ? "Начните разговор" : "Нет сообщений"}</p>
+                  <p>Нет сообщений</p>
                 </div>
               )}
               <div ref={messagesEndRef} />

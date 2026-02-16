@@ -58,7 +58,7 @@ function App() {
   useEffect(() => {
     const init = async () => {
       try {
-        const token = localStorage.getItem("token");
+        const token = sessionStorage.getItem("token");
 
         // нет токена — не авторизованы
         if (!token) {
@@ -66,8 +66,8 @@ function App() {
           return;
         }
 
-        // 1) быстрый fallback из localStorage (чтобы UI не пустовал)
-        const savedUser = localStorage.getItem("user");
+        // 1) быстрый fallback из sessionStorage (чтобы UI не пустовал)
+        const savedUser = sessionStorage.getItem("user");
         if (savedUser) {
           try {
             setUser(JSON.parse(savedUser));
@@ -79,11 +79,11 @@ function App() {
         // 2) источник истины — backend (роль/имя/блокировка и т.д.)
         const res = await api.get("/api/auth/me");
         setUser(res.data);
-        localStorage.setItem("user", JSON.stringify(res.data));
+        sessionStorage.setItem("user", JSON.stringify(res.data));
       } catch (error) {
         console.error("Ошибка инициализации пользователя:", error);
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
+        sessionStorage.removeItem("token");
+        sessionStorage.removeItem("user");
         setUser(null);
       } finally {
         setAppLoading(false);
@@ -95,18 +95,18 @@ function App() {
 
   const handleLogin = (userData) => {
     setUser(userData);
-    localStorage.setItem("user", JSON.stringify(userData));
+    sessionStorage.setItem("user", JSON.stringify(userData));
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    sessionStorage.removeItem("user");
     setUser(null);
   };
 
   const handleUserUpdate = (updatedUser) => {
     setUser(updatedUser);
-    localStorage.setItem("user", JSON.stringify(updatedUser));
+    sessionStorage.setItem("user", JSON.stringify(updatedUser));
   };
 
   return (

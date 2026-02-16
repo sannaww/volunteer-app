@@ -72,6 +72,35 @@ io.on("connection", (socket) => {
   socket.join(`user:${userId}`);
   console.log(`[WS] connected user:${userId}`);
 
+  // ✅ при подключении пользователя — отмечаем все недоставленные как доставленные
+(async () => {
+  try {
+    const undelivered = await prisma.message.findMany({
+      where: { receiverId: userId, deliveredAt: null },
+      select: { id: true, senderId: true },
+    });
+
+    if (!undelivered.length) return;
+
+    const now = new Date();
+
+    await prisma.message.updateMany({
+      where: { id: { in: undelivered.map((m) => m.id) } },
+      data: { deliveredAt: now },
+    });
+
+    // уведомим отправителей
+    for (const m of undelivered) {
+      io.to(`user:${m.senderId}`).emit("message:delivered", {
+        messageId: m.id,
+        deliveredAt: now.toISOString(),
+      });
+    }
+  } catch (e) {
+    console.error("[WS] mark delivered on connect error", e);
+  }
+})();
+
   /**
    * Отправка сообщения в real-time
    * payload: { receiverId: number, text: string }

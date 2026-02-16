@@ -24,7 +24,7 @@ function Profile({ user, onUserUpdate }) {
     if (!user?.role) return;
 
     const key = `profileActiveTab:${user.role}`;
-    const saved = localStorage.getItem(key);
+    const saved = sessionStorage.getItem(key);
 
     const allowedTabs =
       user.role === "organizer"
@@ -39,14 +39,14 @@ function Profile({ user, onUserUpdate }) {
       setActiveTab(saved);
     } else {
       setActiveTab("profile");
-      localStorage.setItem(key, "profile");
+      sessionStorage.setItem(key, "profile");
     }
   }, [user?.role]);
 
   useEffect(() => {
     if (!user?.role) return;
     const key = `profileActiveTab:${user.role}`;
-    localStorage.setItem(key, activeTab);
+    sessionStorage.setItem(key, activeTab);
   }, [activeTab, user?.role]);
 
   // Load profile from server
@@ -56,7 +56,7 @@ function Profile({ user, onUserUpdate }) {
 
       setLoading(true);
       try {
-        const token = localStorage.getItem("token");
+        const token = sessionStorage.getItem("token");
         if (!token) return;
 
         const response = await axios.get("http://localhost:5000/api/auth/me", {
@@ -140,7 +140,7 @@ function Profile({ user, onUserUpdate }) {
 
   const fetchParticipationHistory = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = sessionStorage.getItem("token");
       if (!token) return;
 
       const response = await axios.get(
@@ -163,7 +163,7 @@ function Profile({ user, onUserUpdate }) {
     e.preventDefault();
 
     try {
-      const token = localStorage.getItem("token");
+      const token = sessionStorage.getItem("token");
       if (!token) {
         alert("Требуется авторизация");
         return;
@@ -287,7 +287,7 @@ function Profile({ user, onUserUpdate }) {
     }
 
     try {
-      const token = localStorage.getItem("token");
+      const token = sessionStorage.getItem("token");
       await axios.delete("http://localhost:5000/api/auth/account", {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -295,8 +295,8 @@ function Profile({ user, onUserUpdate }) {
       });
 
       alert("Аккаунт успешно удален");
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("user");
       window.location.href = "/";
     } catch (error) {
       console.error("Ошибка при удалении аккаунта:", error);

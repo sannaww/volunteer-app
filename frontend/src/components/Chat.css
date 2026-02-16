@@ -173,6 +173,25 @@
   display: block;
 }
 
+.message-meta {
+  display: flex;
+  justify-content: flex-end; /* ✅ вправо */
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.message-time {
+  font-size: 12px; /* ✅ меньше */
+  opacity: 0.7;
+}
+
+.message-status {
+  font-size: 12px; /* ✅ под размер времени */
+  opacity: 0.8;
+  user-select: none;
+}
+
 .message-input-form {
   display: flex;
   padding: 1rem;
@@ -290,4 +309,66 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.conversation-delete-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+  margin-left: 8px;
+}
+
+.conversation-delete-btn:hover {
+  opacity: 1;
+}
+
+.chat-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-delete-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  opacity: 0.6;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.chat-delete-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* ✅ Текст сообщения всегда по левому краю */
+.message-content,
+.message-content p {
+  text-align: left !important;
+}
+
+/* чтобы длинные слова/ссылки не ломали верстку */
+.message-content p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-link-with-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-badge-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: red;
+  display: inline-block;
 }
