@@ -1,5 +1,6 @@
-const { PrismaClient } = require("@prisma/client");
+const path = require("path");
 
-const prisma = new PrismaClient();
+const clientPath = path.join(__dirname, "..", "..", "node_modules", "@prisma", "client");
+const { PrismaClient } = require(clientPath);
 
-module.exports = prisma;
+module.exports = new PrismaClient();

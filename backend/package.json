@@ -11,6 +11,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "http-proxy-middleware": "^3.0.5"
+    "@prisma/client": "^6.16.3",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "http-proxy-middleware": "^3.0.5",
+    "jsonwebtoken": "^9.0.3"
+  },
+  "devDependencies": {
+    "prisma": "^6.16.3"
   }
 }

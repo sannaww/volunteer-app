@@ -1,5 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const prisma = require("../prismaClient");
 const AUTH_SERVICE_URL = "http://localhost:5001";
 const POINTS_FOR_APPROVE = 10; // сколько баллов даём за одобренную заявку
 

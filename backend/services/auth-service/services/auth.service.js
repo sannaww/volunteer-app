@@ -1,8 +1,8 @@
-const { PrismaClient } = require("@prisma/client");
+const prisma = require("../prismaClient");
+
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-const prisma = new PrismaClient();
 const JWT_SECRET = "your-secret-key";
 
 // helpers
@@ -265,5 +265,5 @@ module.exports = {
   getMe,
   updateProfile,
   getUserById,
-  deleteAccount
+  deleteAccount,
 };
