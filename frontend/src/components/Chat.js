@@ -460,7 +460,11 @@ function Chat({ user }) {
       setMessages([]);
     } catch (e) {
       console.error("Ошибка удаления диалога:", e);
-      alert("Не удалось удалить диалог");
+      alert(
+    e?.response?.status
+      ? `Не удалось удалить: ${e.response.status} ${e.response.data?.message || ""}`
+      : "Не удалось удалить диалог"
+  );
     }
   };
 

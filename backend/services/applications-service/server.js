@@ -25,7 +25,7 @@ app.use(
 );
 app.use(express.json());
 
-// HTTP routes (как у тебя)
+// HTTP routes
 app.use("/messages", messagesRoutes);
 app.use("/", applicationsRoutes);
 app.use("/internal", internalRoutes);
@@ -44,6 +44,21 @@ const io = new Server(server, {
     credentials: true,
   },
 });
+
+/**
+ * ✅ Утилита: пересчитать общее кол-во непрочитанных и отправить пользователю.
+ * Navbar слушает событие `unread:count` и мгновенно убирает/ставит кружок.
+ */
+async function emitUnreadCount(userId) {
+  try {
+    const total = await prisma.message.count({
+      where: { receiverId: userId, readAt: null },
+    });
+    io.to(`user:${userId}`).emit("unread:count", { total });
+  } catch (e) {
+    console.error("[WS] emitUnreadCount error", e);
+  }
+}
 
 // WS JWT-auth
 io.use((socket, next) => {
@@ -72,34 +87,88 @@ io.on("connection", (socket) => {
   socket.join(`user:${userId}`);
   console.log(`[WS] connected user:${userId}`);
 
+  // При коннекте сразу отдадим актуальный total unread (чтобы Navbar синхронизировался)
+  emitUnreadCount(userId);
+
   // ✅ при подключении пользователя — отмечаем все недоставленные как доставленные
-(async () => {
-  try {
-    const undelivered = await prisma.message.findMany({
-      where: { receiverId: userId, deliveredAt: null },
-      select: { id: true, senderId: true },
-    });
-
-    if (!undelivered.length) return;
-
-    const now = new Date();
-
-    await prisma.message.updateMany({
-      where: { id: { in: undelivered.map((m) => m.id) } },
-      data: { deliveredAt: now },
-    });
-
-    // уведомим отправителей
-    for (const m of undelivered) {
-      io.to(`user:${m.senderId}`).emit("message:delivered", {
-        messageId: m.id,
-        deliveredAt: now.toISOString(),
+  (async () => {
+    try {
+      const undelivered = await prisma.message.findMany({
+        where: { receiverId: userId, deliveredAt: null },
+        select: { id: true, senderId: true },
       });
+
+      if (!undelivered.length) return;
+
+      const now = new Date();
+
+      await prisma.message.updateMany({
+        where: { id: { in: undelivered.map((m) => m.id) } },
+        data: { deliveredAt: now },
+      });
+
+      // уведомим отправителей
+      for (const m of undelivered) {
+        io.to(`user:${m.senderId}`).emit("message:delivered", {
+          messageId: m.id,
+          deliveredAt: now.toISOString(),
+        });
+      }
+    } catch (e) {
+      console.error("[WS] mark delivered on connect error", e);
     }
-  } catch (e) {
-    console.error("[WS] mark delivered on connect error", e);
-  }
-})();
+  })();
+
+  /**
+   * ✅ Отметить диалог как прочитанный (readAt).
+   * payload: { partnerId: number }
+   * - Ставит readAt у всех сообщений partner -> me, где readAt == null
+   * - Отправляет partner событие `messages:read` (для ✓✓ у отправителя)
+   * - Отправляет me событие `unread:count` (для мгновенного обновления кружка в Navbar)
+   */
+  socket.on("conversation:read", async (payload) => {
+    try {
+      const readerId = userId; // кто читает
+      const partnerId = Number(payload?.partnerId);
+      if (!partnerId) return;
+
+      const now = new Date();
+
+      const toRead = await prisma.message.findMany({
+        where: {
+          senderId: partnerId,
+          receiverId: readerId,
+          readAt: null,
+        },
+        select: { id: true },
+      });
+
+      if (!toRead.length) {
+        // даже если нечего читать — всё равно синхронизируем Navbar
+        await emitUnreadCount(readerId);
+        return;
+      }
+
+      const ids = toRead.map((m) => m.id);
+
+      await prisma.message.updateMany({
+        where: { id: { in: ids } },
+        data: { readAt: now },
+      });
+
+      // уведомляем отправителя (партнёра), чтобы у него стало ✓✓
+      io.to(`user:${partnerId}`).emit("messages:read", {
+        messageIds: ids,
+        readAt: now.toISOString(),
+        readerId,
+      });
+
+      // уведомляем читателя, чтобы мгновенно убрать кружок
+      await emitUnreadCount(readerId);
+    } catch (e) {
+      console.error("[WS] conversation:read error", e);
+    }
+  });
 
   /**
    * Отправка сообщения в real-time
@@ -137,6 +206,9 @@ io.on("connection", (socket) => {
 
       // отправителю подтверждение
       socket.emit("message:sent", dto);
+
+      // ✅ мгновенно обновим кружок у получателя (без лишнего GET /conversations)
+      await emitUnreadCount(receiverId);
     } catch (err) {
       console.error("[WS] message:send error", err);
       socket.emit("message:error", { error: "Ошибка отправки" });

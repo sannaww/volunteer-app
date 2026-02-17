@@ -65,13 +65,42 @@ router.get('/conversations', async (req, res) => {
     if (!map.has(partnerId)) {
       map.set(partnerId, {
         user: safeUserFallback(partnerId),
-        lastMessage: { text: m.text, createdAt: m.createdAt },
+        lastMessage: {
+  id: m.id,
+  text: m.text,
+  createdAt: m.createdAt,
+  senderId: m.senderId,
+  receiverId: m.receiverId,
+  deliveredAt: m.deliveredAt,
+  readAt: m.readAt,
+},
         unreadCount: 0,
       });
     }
   }
 
   const partnerIds = Array.from(map.keys());
+
+    // ✅ считаем непрочитанные: сообщения -> МНЕ (receiverId=userId), ещё не прочитаны (readAt=null)
+  const unreadGrouped = await prisma.message.groupBy({
+    by: ["senderId"],
+    where: {
+      receiverId: userId,
+      readAt: null,
+      senderId: { in: partnerIds },
+    },
+    _count: { _all: true },
+  });
+
+  const unreadByPartner = new Map(
+    unreadGrouped.map((row) => [row.senderId, row._count._all])
+  );
+
+  // проставим в map
+  for (const pid of partnerIds) {
+    const conv = map.get(pid);
+    if (conv) conv.unreadCount = unreadByPartner.get(pid) || 0;
+  }
 
   // подтягиваем пользователей параллельно
   const users = await Promise.all(

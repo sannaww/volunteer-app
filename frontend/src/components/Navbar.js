@@ -52,10 +52,16 @@ function Navbar({ user, onLogout }) {
       fetchTotalUnread();
     });
 
+    s.on("unread:count", ({ total }) => {
+  setTotalUnread(Number(total) || 0);
+});
+
+
     // Если вдруг переподключение/ошибка
     s.on("connect_error", (e) => {
       console.log("Navbar WS error:", e.message);
     });
+    
 
     return () => {
       s.disconnect();
