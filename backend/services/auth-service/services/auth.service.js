@@ -235,6 +235,7 @@ async function getUserById(userId) {
       firstName: true,
       lastName: true,
       role: true,
+      points: true,
     },
   });
 }

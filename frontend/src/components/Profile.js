@@ -68,15 +68,16 @@ function Profile({ user, onUserUpdate }) {
         const userData = response.data;
 
         const userProfile = {
-          firstName: userData.firstName,
-          lastName: userData.lastName,
-          email: userData.email,
-          role: userData.role,
-          phone: userData.phone || "",
-          skills: userData.skills || "",
-          interests: userData.interests || "",
-          bio: userData.bio || "",
-          createdAt: userData.createdAt,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        email: userData.email,
+        role: userData.role,
+        points: typeof userData.points === "number" ? userData.points : (user?.points ?? 0), // ✅
+        phone: userData.phone || "",
+        skills: userData.skills || "",
+        interests: userData.interests || "",
+        bio: userData.bio || "",
+        createdAt: userData.createdAt,
         };
 
         setProfile(userProfile);
@@ -105,6 +106,7 @@ function Profile({ user, onUserUpdate }) {
           lastName: user.lastName,
           email: user.email,
           role: user.role,
+          points: user.points ?? 0,
           phone: user.phone || "",
           skills: user.skills || "",
           interests: user.interests || "",

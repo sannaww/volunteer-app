@@ -7,7 +7,6 @@ import { getFavorites, addFavorite, removeFavorite } from "../api/favorites";
 import { getReviews, createReview } from "../api/reviews";
 import { canReview } from "../api/canReview";
 
-
 function ProjectList({ user }) {
   const [projects, setProjects] = useState([]);
   const [filteredProjects, setFilteredProjects] = useState([]);
@@ -433,11 +432,28 @@ const closeReviewsModal = () => {
                 </span>
               </div>
 
+              <div className="project-header-right" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
               {project.projectType && (
                 <span className="project-type-badge">
                   {getProjectTypeLabel(project.projectType)}
                 </span>
               )}
+
+              {user && user.role === 'volunteer' && project.status !== "CANCELLED" && (
+                <button
+                  className="btn favorite-top-btn"
+                  onClick={() => toggleFavorite(project.id)}
+                  style={{
+                    border: "1px solid #ccc",
+                    background: "white",
+                    fontSize: 18
+                  }}
+                  title="В избранное"
+                >
+                  {favoriteIds.has(project.id) ? "❤️" : "🤍"}
+                </button>
+              )}
+            </div>
             </div>
 
             {/* Rating display */}
@@ -496,20 +512,6 @@ const closeReviewsModal = () => {
                 <>
                   {project.status === 'ACTIVE' ? (
                     <>
-                      {/* Favorite */}
-                      <button
-                        className="btn"
-                        onClick={() => toggleFavorite(project.id)}
-                        style={{
-                          border: "1px solid #ccc",
-                          background: "white",
-                          fontSize: 18
-                        }}
-                        title="В избранное"
-                      >
-                        {favoriteIds.has(project.id) ? "❤️" : "🤍"}
-                      </button>
-
                       {/* Apply */}
                       <button
                         className="btn btn-primary"

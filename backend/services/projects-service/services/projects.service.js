@@ -1,5 +1,13 @@
 const prisma = require("../prismaClient");
 
+/**
+ * projects.service.js
+ * ✅ Добавили поля:
+ *   - applicationsCount (всего заявок)
+ *   - pendingApplicationsCount (новых заявок со статусом PENDING)
+ * чтобы на карточке проекта поле "Заявки: Всего" не было пустым.
+ */
+
 exports.getAllProjects = async (query = {}) => {
   const {
     search,
@@ -8,8 +16,8 @@ exports.getAllProjects = async (query = {}) => {
     status,
     dateFrom,
     dateTo,
-    sortBy = 'createdAt',
-    sortOrder = 'desc',
+    sortBy = "createdAt",
+    sortOrder = "desc",
   } = query;
 
   const where = {};
@@ -17,22 +25,22 @@ exports.getAllProjects = async (query = {}) => {
   // 1) Статус
   if (status) {
     // поддержка нескольких статусов через запятую
-    if (String(status).includes(',')) {
-      where.status = { in: String(status).split(',') };
+    if (String(status).includes(",")) {
+      where.status = { in: String(status).split(",") };
     } else {
       where.status = status;
     }
   } else {
     // по умолчанию скрываем черновики (для общего списка)
-    where.status = { not: 'DRAFT' };
+    where.status = { not: "DRAFT" };
   }
 
   // 2) Поиск по названию/описанию
   if (search && String(search).trim()) {
     const s = String(search).trim();
     where.OR = [
-      { title: { contains: s, mode: 'insensitive' } },
-      { description: { contains: s, mode: 'insensitive' } },
+      { title: { contains: s, mode: "insensitive" } },
+      { description: { contains: s, mode: "insensitive" } },
     ];
   }
 
@@ -43,7 +51,7 @@ exports.getAllProjects = async (query = {}) => {
 
   // 4) Локация (подстрока)
   if (location && String(location).trim()) {
-    where.location = { contains: String(location).trim(), mode: 'insensitive' };
+    where.location = { contains: String(location).trim(), mode: "insensitive" };
   }
 
   // 5) Диапазон дат (или проекты без даты)
@@ -63,56 +71,101 @@ exports.getAllProjects = async (query = {}) => {
   }
 
   // 6) Сортировка (защита от неверных полей)
-  const allowedSort = new Set(['createdAt', 'startDate', 'title']);
-  const safeSortBy = allowedSort.has(sortBy) ? sortBy : 'createdAt';
-  const safeSortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
+  const allowedSort = new Set(["createdAt", "startDate", "title"]);
+  const safeSortBy = allowedSort.has(sortBy) ? sortBy : "createdAt";
+  const safeSortOrder = sortOrder === "asc" ? "asc" : "desc";
 
-  return prisma.project.findMany({
+  // --- 1) Забираем проекты как раньше ---
+  const projects = await prisma.project.findMany({
     where,
     include: {
       creator: {
         select: { id: true, firstName: true, lastName: true, role: true },
       },
+      // оставляем как было, чтобы ничего не сломать в других местах
       applications: true,
     },
     orderBy: {
       [safeSortBy]: safeSortOrder,
     },
   });
+
+  // --- 2) Считаем заявки по projectId (всего + PENDING) ---
+  const ids = projects.map((p) => p.id);
+  if (!ids.length) return projects;
+
+  const totalGrouped = await prisma.application.groupBy({
+    by: ["projectId"],
+    where: { projectId: { in: ids } },
+    _count: { _all: true },
+  });
+
+  const pendingGrouped = await prisma.application.groupBy({
+    by: ["projectId"],
+    where: { projectId: { in: ids }, status: "PENDING" },
+    _count: { _all: true },
+  });
+
+  const totalMap = new Map(totalGrouped.map((r) => [r.projectId, r._count._all]));
+  const pendingMap = new Map(
+    pendingGrouped.map((r) => [r.projectId, r._count._all])
+  );
+
+  // --- 3) Возвращаем проекты + новые поля ---
+  return projects.map((p) => ({
+    ...p,
+    applicationsCount: totalMap.get(p.id) || 0,
+    pendingApplicationsCount: pendingMap.get(p.id) || 0,
+  }));
 };
 
-
 exports.getProjectById = async (id) => {
-  return prisma.project.findUnique({
+  const project = await prisma.project.findUnique({
     where: { id: parseInt(id, 10) },
     include: {
       creator: {
-        select: { id: true, firstName: true, lastName: true, role: true }
+        select: { id: true, firstName: true, lastName: true, role: true },
       },
-      applications: true
-    }
+      applications: true,
+    },
   });
-};
 
+  if (!project) return null;
+
+  const [applicationsCount, pendingApplicationsCount] = await Promise.all([
+    prisma.application.count({ where: { projectId: project.id } }),
+    prisma.application.count({
+      where: { projectId: project.id, status: "PENDING" },
+    }),
+  ]);
+
+  return {
+    ...project,
+    applicationsCount,
+    pendingApplicationsCount,
+  };
+};
 
 exports.createProject = async (data) => {
   return prisma.project.create({
     data: {
       title: data.title,
       description: data.description,
-      status: data.status || 'DRAFT',
+      status: data.status || "DRAFT",
       createdBy: data.createdBy,
       startDate: data.startDate ? new Date(data.startDate) : null,
       endDate: data.endDate ? new Date(data.endDate) : null,
       location: data.location || null,
       projectType: data.projectType || null,
-      volunteersRequired: data.volunteersRequired ? parseInt(data.volunteersRequired, 10) : 1,
+      volunteersRequired: data.volunteersRequired
+        ? parseInt(data.volunteersRequired, 10)
+        : 1,
       contactInfo: data.contactInfo || null,
     },
     include: {
       creator: { select: { firstName: true, lastName: true } },
-      applications: true
-    }
+      applications: true,
+    },
   });
 };
 
@@ -122,11 +175,15 @@ exports.updateProject = async (id, data) => {
   // 1) Пустые строки -> null (чтобы Prisma не падала)
   const toNullIfEmpty = (v) => (v === "" ? null : v);
 
-  if (updateData.title !== undefined) updateData.title = String(updateData.title).trim();
-  if (updateData.description !== undefined) updateData.description = String(updateData.description).trim();
+  if (updateData.title !== undefined)
+    updateData.title = String(updateData.title).trim();
+  if (updateData.description !== undefined)
+    updateData.description = String(updateData.description).trim();
 
-  if (updateData.location !== undefined) updateData.location = toNullIfEmpty(updateData.location);
-  if (updateData.contactInfo !== undefined) updateData.contactInfo = toNullIfEmpty(updateData.contactInfo);
+  if (updateData.location !== undefined)
+    updateData.location = toNullIfEmpty(updateData.location);
+  if (updateData.contactInfo !== undefined)
+    updateData.contactInfo = toNullIfEmpty(updateData.contactInfo);
 
   // 2) projectType: если пусто -> null, иначе оставляем
   if (updateData.projectType !== undefined) {
@@ -142,7 +199,9 @@ exports.updateProject = async (id, data) => {
 
   // 4) Даты: "" -> null, иначе Date
   if (updateData.startDate !== undefined) {
-    updateData.startDate = updateData.startDate ? new Date(updateData.startDate) : null;
+    updateData.startDate = updateData.startDate
+      ? new Date(updateData.startDate)
+      : null;
   }
   if (updateData.endDate !== undefined) {
     updateData.endDate = updateData.endDate ? new Date(updateData.endDate) : null;
@@ -150,10 +209,14 @@ exports.updateProject = async (id, data) => {
 
   // 5) volunteersRequired: строка -> число, "" -> не трогаем/или null
   if (updateData.volunteersRequired !== undefined) {
-    if (updateData.volunteersRequired === "" || updateData.volunteersRequired === null) {
+    if (
+      updateData.volunteersRequired === "" ||
+      updateData.volunteersRequired === null
+    ) {
       delete updateData.volunteersRequired;
     } else {
-      updateData.volunteersRequired = parseInt(updateData.volunteersRequired, 10) || 1;
+      updateData.volunteersRequired =
+        parseInt(updateData.volunteersRequired, 10) || 1;
     }
   }
 
@@ -165,15 +228,14 @@ exports.updateProject = async (id, data) => {
     data: updateData,
     include: {
       creator: { select: { firstName: true, lastName: true } },
-      applications: true
-    }
+      applications: true,
+    },
   });
 };
 
-
 exports.deleteProject = async (id) => {
   return prisma.project.delete({
-    where: { id: parseInt(id, 10) }
+    where: { id: parseInt(id, 10) },
   });
 };
 
