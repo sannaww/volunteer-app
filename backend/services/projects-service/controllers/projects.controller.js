@@ -49,12 +49,18 @@ exports.getProjects = async (req, res) => {
 
 exports.getProject = async (req, res) => {
   try {
-    const project = await projectsService.getProjectById(req.params.id);
-    if (!project) return res.status(404).json({ error: 'Проект не найден' });
+    const id = parseInt(req.params.id, 10);
+    if (Number.isNaN(id)) {
+      return res.status(400).json({ error: "Некорректный id проекта" });
+    }
+
+    const project = await projectsService.getProjectById(id);
+    if (!project) return res.status(404).json({ error: "Проект не найден" });
+
     res.json(project);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Ошибка получения проекта' });
+    res.status(500).json({ error: "Ошибка получения проекта" });
   }
 };
 
@@ -189,5 +195,33 @@ exports.getOrganizerCalendar = async (req, res) => {
     console.error("getOrganizerCalendar error:", error);
     res.status(500).json({ error: "Ошибка получения календаря",
     details: error.message, });
+  }
+};
+
+// GET /organizer?status=ALL&includeDrafts=true&search=...
+exports.getOrganizerProjects = async (req, res) => {
+  try {
+    const { userId, role } = getUserFromHeaders(req);
+
+    if (!userId) return res.status(401).json({ error: "Требуется авторизация" });
+    if (!["organizer", "admin"].includes(role)) {
+      return res.status(403).json({ error: "Недостаточно прав" });
+    }
+
+    const status = (req.query.status || "ALL").toString().toUpperCase();
+    const includeDrafts = String(req.query.includeDrafts || "true") === "true";
+    const search = (req.query.search || "").toString();
+
+    const projects = await projectsService.getOrganizerProjects({
+      organizerId: userId,
+      status,
+      includeDrafts,
+      search,
+    });
+
+    return res.json(projects);
+  } catch (error) {
+    console.error("getOrganizerProjects error:", error);
+    res.status(500).json({ error: "Ошибка получения проектов организатора", details: error.message });
   }
 };

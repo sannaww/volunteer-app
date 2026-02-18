@@ -6,6 +6,7 @@ import OrganizerStats from "./OrganizerStats";
 import DraftProjects from "./DraftProjects";
 import ProjectHistory from "./ProjectHistory";
 import AdminDashboard from "./AdminDashboard";
+import OrganizerMyProjects from "./OrganizerMyProjects";
 
 function Profile({ user, onUserUpdate }) {
   const [activeTab, setActiveTab] = useState("profile");
@@ -28,7 +29,7 @@ function Profile({ user, onUserUpdate }) {
 
     const allowedTabs =
       user.role === "organizer"
-        ? ["profile", "stats", "drafts"]
+        ? ["profile", "stats", "myProjects", "drafts"]
         : user.role === "volunteer"
         ? ["profile", "history"]
         : user.role === "admin"
@@ -404,6 +405,14 @@ ${profile.firstName} ${profile.lastName}
             </button>
 
             <button
+              className={`tab ${activeTab === "myProjects" ? "active" : ""}`}
+              onClick={() => activeTab !== "myProjects" && setActiveTab("myProjects")}
+              type="button"
+            >
+              📁 Мои проекты
+            </button>
+
+            <button
               className={`tab ${activeTab === "drafts" ? "active" : ""}`}
               onClick={() => activeTab !== "drafts" && setActiveTab("drafts")}
               type="button"
@@ -659,6 +668,13 @@ ${profile.firstName} ${profile.lastName}
         {activeTab === "stats" && user?.role === "organizer" && (
           <div className="profile-section">
             <OrganizerStats user={user} />
+          </div>
+        )}
+
+        {activeTab === "myProjects" && user?.role === "organizer" && (
+          <div className="profile-section">
+            <h2>Мои проекты</h2>
+            <OrganizerMyProjects user={user} />
           </div>
         )}
 

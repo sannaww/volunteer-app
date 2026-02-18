@@ -1,12 +1,8 @@
 const prisma = require("../prismaClient");
 
-/**
- * projects.service.js
- * ✅ Добавили поля:
- *   - applicationsCount (всего заявок)
- *   - pendingApplicationsCount (новых заявок со статусом PENDING)
- * чтобы на карточке проекта поле "Заявки: Всего" не было пустым.
- */
+ //Добавили поля: - applicationsCount (всего заявок) 
+ //- pendingApplicationsCount (новых заявок со статусом PENDING)
+ //чтобы на карточке проекта поле "Заявки: Всего" не было пустым.
 
 exports.getAllProjects = async (query = {}) => {
   const {
@@ -219,6 +215,33 @@ exports.updateProject = async (id, data) => {
         parseInt(updateData.volunteersRequired, 10) || 1;
     }
   }
+// ✅ Маппинг фронтовых полей -> полям Prisma модели
+// старое название -> новое (по твоей схеме)
+if (updateData.type !== undefined) {
+  updateData.projectType = updateData.type;
+  delete updateData.type;
+}
+
+if (updateData.volunteersNeeded !== undefined) {
+  updateData.volunteersRequired = updateData.volunteersNeeded;
+  delete updateData.volunteersNeeded;
+}
+// ✅ Маппинг русских значений -> enum ProjectType (Prisma)
+const projectTypeMapRuToEnum = {
+  "Экология": "ECOLOGY",
+  "Помощь животным": "ANIMAL_WELFARE",
+  "Образование": "EDUCATION",
+  "Социальная помощь": "SOCIAL",
+  "Культура": "CULTURAL",
+  "Спорт": "SPORTS",
+  "Медицина": "MEDICAL",
+  "Другое": "OTHER",
+};
+
+// Если прилетело по-русски — переведём в enum
+if (updateData.projectType && projectTypeMapRuToEnum[updateData.projectType]) {
+  updateData.projectType = projectTypeMapRuToEnum[updateData.projectType];
+}
 
   // 6) Важно: не даём обновлять createdBy с фронта
   if (updateData.createdBy !== undefined) delete updateData.createdBy;
@@ -259,6 +282,45 @@ exports.getOrganizerProjectsForCalendar = async ({ organizerId, start, end }) =>
       projectType: true,
       volunteersRequired: true,
       contactInfo: true,
+    },
+  });
+};
+
+// Список проектов текущего организатора
+// status: ALL | ACTIVE | COMPLETED | CANCELLED | DRAFT
+// includeDrafts: true/false
+// search: строка
+exports.getOrganizerProjects = async ({ organizerId, status = "ALL", includeDrafts = true, search = "" }) => {
+  const where = { createdBy: organizerId };
+
+  const safeStatus = String(status || "ALL").toUpperCase();
+  const safeIncludeDrafts = String(includeDrafts) === "true" || includeDrafts === true;
+
+  // статус
+  if (safeStatus !== "ALL") {
+    where.status = safeStatus;
+  } else {
+    // ALL
+    if (!safeIncludeDrafts) where.status = { not: "DRAFT" };
+  }
+
+  // поиск (title/description/location/contactInfo)
+  const s = String(search || "").trim();
+  if (s) {
+    where.OR = [
+      { title: { contains: s, mode: "insensitive" } },
+      { description: { contains: s, mode: "insensitive" } },
+      { location: { contains: s, mode: "insensitive" } },
+      { contactInfo: { contains: s, mode: "insensitive" } },
+    ];
+  }
+
+  return prisma.project.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    include: {
+      creator: { select: { id: true, firstName: true, lastName: true, role: true } },
+      applications: true,
     },
   });
 };

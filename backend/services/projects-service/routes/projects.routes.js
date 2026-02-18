@@ -8,6 +8,9 @@ router.get('/', projectsController.getProjects);
 
 router.get("/organizer/calendar", projectsController.getOrganizerCalendar);
 
+// Список проектов текущего организатора
+router.get("/organizer", projectsController.getOrganizerProjects);
+
 // Получить проект по ID
 router.get('/:id', projectsController.getProject);
 

@@ -116,6 +116,8 @@ app.use(
     const isOrganizerCalendar = req.path.startsWith("/organizer/calendar");
     if (isOrganizerCalendar) return attachAuth(req, res, next);
 
+    if (req.path.startsWith("/organizer")) return attachAuth(req, res, next);
+
     // favorites: всегда с токеном
     if (isFavoritesRoute) return attachAuth(req, res, next);
 
@@ -134,6 +136,9 @@ app.use(
 
     const isOrganizerCalendar = req.path.startsWith("/organizer/calendar");
     if (isOrganizerCalendar) return requireRole(["organizer", "admin"])(req, res, next);
+
+    const isOrganizerProjects = req.path === "/organizer" || req.path.startsWith("/organizer/");
+    if (isOrganizerProjects) return requireRole(["organizer", "admin"])(req, res, next);
 
     if (isFavoritesRoute) return requireRole(["volunteer", "admin"])(req, res, next);
 
