@@ -134,3 +134,94 @@ exports.rejectProject = async (req, res) => {
   }
 };
 
+// GET /api/admin/reviews
+exports.getAllReviews = async (req, res) => {
+  try {
+    const reviews = await prisma.review.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        project: { select: { id: true, title: true, status: true } },
+      },
+    });
+
+    // Пытаемся сопоставить authorId (String) -> User.id (Int), если authorId хранит число строкой
+    const authorIdsInt = Array.from(
+      new Set(
+        reviews
+          .map((r) => Number(r.authorId))
+          .filter((n) => Number.isInteger(n) && n > 0)
+      )
+    );
+
+    let usersById = new Map();
+    if (authorIdsInt.length) {
+      const users = await prisma.user.findMany({
+        where: { id: { in: authorIdsInt } },
+        select: { id: true, firstName: true, lastName: true, email: true },
+      });
+      usersById = new Map(users.map((u) => [u.id, u]));
+    }
+
+    const enriched = reviews.map((r) => {
+      const uid = Number(r.authorId);
+      const u = usersById.get(uid);
+      return {
+        ...r,
+        authorName: u ? `${u.firstName || ""} ${u.lastName || ""}`.trim() : null,
+        authorEmail: u?.email || null,
+      };
+    });
+
+    res.json(enriched);
+  } catch (e) {
+    console.error("getAllReviews error:", e);
+    res.status(500).json({ message: "Failed to load reviews" });
+  }
+};
+
+// DELETE /api/admin/reviews/:id
+exports.deleteReviewById = async (req, res) => {
+  const reviewId = String(req.params.id || "").trim();
+  if (!reviewId) return res.status(400).json({ message: "Invalid review id" });
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      const review = await tx.review.findUnique({
+        where: { id: reviewId },
+        select: { id: true, projectId: true },
+      });
+
+      if (!review) return { notFound: true };
+
+      await tx.review.delete({ where: { id: reviewId } });
+
+      // Пересчёт рейтинга проекта
+      const agg = await tx.review.aggregate({
+        where: { projectId: review.projectId },
+        _avg: { rating: true },
+        _count: { _all: true },
+      });
+
+      const newAvg = agg._avg.rating ?? 0;
+      const newCount = agg._count._all ?? 0;
+
+      await tx.project.update({
+        where: { id: review.projectId },
+        data: { avgRating: newAvg, reviewsCount: newCount },
+      });
+
+      return {
+        deleted: true,
+        projectId: review.projectId,
+        avgRating: newAvg,
+        reviewsCount: newCount,
+      };
+    });
+
+    if (result.notFound) return res.status(404).json({ message: "Review not found" });
+    res.json(result);
+  } catch (e) {
+    console.error("deleteReviewById error:", e);
+    res.status(500).json({ message: "Failed to delete review" });
+  }
+};

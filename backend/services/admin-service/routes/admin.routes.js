@@ -17,4 +17,8 @@ router.get('/projects/pending', adminController.getPendingProjects);
 router.patch('/projects/:id/approve', adminController.approveProject);
 router.patch('/projects/:id/reject', adminController.rejectProject);
 
+//модерация отзывов
+router.get("/reviews", adminController.getAllReviews);
+router.delete("/reviews/:id", adminController.deleteReviewById);
+
 module.exports = router;

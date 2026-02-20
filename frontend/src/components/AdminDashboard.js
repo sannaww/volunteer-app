@@ -7,22 +7,26 @@ function AdminDashboard({ user, onOpenFullAdmin }) {
 
   const [pendingProjects, setPendingProjects] = useState([]);
   const [users, setUsers] = useState([]);
+  const [reviews, setReviews] = useState([]);
   const [query, setQuery] = useState("");
 
   const refresh = async () => {
     setLoading(true);
     try {
-      const [pRes, uRes] = await Promise.all([
+      const [pRes, uRes, rRes] = await Promise.all([
         api.get("/api/admin/projects/pending"),
         api.get("/api/admin/users"),
+        api.get("/api/admin/reviews"),
       ]);
 
       setPendingProjects(Array.isArray(pRes.data) ? pRes.data : []);
       setUsers(Array.isArray(uRes.data) ? uRes.data : []);
+      setReviews(Array.isArray(rRes.data) ? rRes.data : []);
     } catch (e) {
       console.error("AdminDashboard refresh error:", e);
       setPendingProjects([]);
       setUsers([]);
+      setReviews([]);
     } finally {
       setLoading(false);
     }
@@ -87,13 +91,25 @@ function AdminDashboard({ user, onOpenFullAdmin }) {
     }
   };
 
+  const deleteReview = async (reviewId) => {
+    const ok = window.confirm("Удалить этот отзыв? Действие необратимо.");
+    if (!ok) return;
+
+    try {
+      await api.delete(`/api/admin/reviews/${reviewId}`);
+      setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+    } catch (e) {
+      console.error("delete review error:", e);
+      alert("Не удалось удалить отзыв");
+    }
+  };
+
   const filteredUsers = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return users.slice(0, 8); // компактно в ЛК
     return users
       .filter((u) => {
-        const hay = `${u.id} ${u.email || ""} ${u.firstName || ""} ${u.lastName || ""} ${u.role || ""}`
-          .toLowerCase();
+        const hay = `${u.id} ${u.email || ""} ${u.firstName || ""} ${u.lastName || ""} ${u.role || ""}`.toLowerCase();
         return hay.includes(q);
       })
       .slice(0, 12);
@@ -109,20 +125,14 @@ function AdminDashboard({ user, onOpenFullAdmin }) {
       <div className="admin-mini-header">
         <div>
           <h2>Админ-панель (в ЛК)</h2>
-          <p className="muted">
-            Быстрые действия и обзор. Полный интерфейс — на отдельной странице.
-          </p>
+          <p className="muted">Быстрые действия и обзор. Полный интерфейс — на отдельной странице.</p>
         </div>
 
         <div className="admin-mini-actions">
           <button className="admin-mini-btn" type="button" onClick={refresh}>
             🔄 Обновить
           </button>
-          <button
-            className="admin-mini-btn primary"
-            type="button"
-            onClick={onOpenFullAdmin}
-          >
+          <button className="admin-mini-btn primary" type="button" onClick={onOpenFullAdmin}>
             ↗ Открыть полную панель
           </button>
         </div>
@@ -172,18 +182,10 @@ function AdminDashboard({ user, onOpenFullAdmin }) {
                       </div>
 
                       <div className="mini-actions">
-                        <button
-                          className="admin-mini-btn success"
-                          type="button"
-                          onClick={() => approveProject(p.id)}
-                        >
+                        <button className="admin-mini-btn success" type="button" onClick={() => approveProject(p.id)}>
                           ✅
                         </button>
-                        <button
-                          className="admin-mini-btn danger"
-                          type="button"
-                          onClick={() => rejectProject(p.id)}
-                        >
+                        <button className="admin-mini-btn danger" type="button" onClick={() => rejectProject(p.id)}>
                           ❌
                         </button>
                       </div>
@@ -211,39 +213,56 @@ function AdminDashboard({ user, onOpenFullAdmin }) {
                   {filteredUsers.map((u) => (
                     <div key={u.id} className="user-row">
                       <div className="user-main">
-                        <div className="user-name">
-                          {`${u.firstName || ""} ${u.lastName || ""}`.trim() || `User #${u.id}`}
-                        </div>
+                        <div className="user-name">{`${u.firstName || ""} ${u.lastName || ""}`.trim() || `User #${u.id}`}</div>
                         <div className="muted small">{u.email || "—"}</div>
                       </div>
 
                       <div className="user-controls">
-                        <select
-                          value={u.role}
-                          onChange={(e) => changeRole(u.id, e.target.value)}
-                        >
+                        <select value={u.role} onChange={(e) => changeRole(u.id, e.target.value)}>
                           <option value="volunteer">volunteer</option>
                           <option value="organizer">organizer</option>
                           <option value="admin">admin</option>
                         </select>
 
                         {u.isBlocked ? (
-                          <button
-                            className="admin-mini-btn"
-                            type="button"
-                            onClick={() => unblockUser(u.id)}
-                          >
+                          <button className="admin-mini-btn" type="button" onClick={() => unblockUser(u.id)}>
                             Разбл.
                           </button>
                         ) : (
-                          <button
-                            className="admin-mini-btn danger"
-                            type="button"
-                            onClick={() => blockUser(u.id)}
-                          >
+                          <button className="admin-mini-btn danger" type="button" onClick={() => blockUser(u.id)}>
                             Блок.
                           </button>
                         )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="admin-mini-section">
+              <div className="section-head">
+                <h3>Отзывы (последние)</h3>
+              </div>
+
+              {reviews.length === 0 ? (
+                <div className="empty">Отзывов пока нет</div>
+              ) : (
+                <div className="mini-list">
+                  {reviews.slice(0, 6).map((r) => (
+                    <div key={r.id} className="mini-item">
+                      <div className="mini-main">
+                        <strong>{r.project?.title || "Проект"}</strong>
+                        <div className="muted small">
+                          ⭐ {r.rating} · Автор: {r.authorName || r.authorEmail || r.authorId || "—"} · {formatDate(r.createdAt)}
+                        </div>
+                        {r.text ? <div className="muted small">{r.text}</div> : null}
+                      </div>
+
+                      <div className="mini-actions">
+                        <button className="admin-mini-btn danger" type="button" onClick={() => deleteReview(r.id)} title="Удалить отзыв">
+                          🗑️
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -255,6 +274,13 @@ function AdminDashboard({ user, onOpenFullAdmin }) {
       )}
     </div>
   );
+}
+
+function formatDate(v) {
+  if (!v) return "—";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("ru-RU");
 }
 
 export default AdminDashboard;

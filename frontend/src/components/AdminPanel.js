@@ -3,7 +3,7 @@ import api from "../api/client";
 import "./AdminPanel.css";
 
 function AdminPanel({ user }) {
-  const [tab, setTab] = useState("projects"); // projects | users
+  const [tab, setTab] = useState("projects"); // projects | users | reviews
 
   // --- Projects moderation ---
   const [pendingProjects, setPendingProjects] = useState([]);
@@ -14,15 +14,20 @@ function AdminPanel({ user }) {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [query, setQuery] = useState("");
 
+  // --- Reviews moderation ---
+  const [reviews, setReviews] = useState([]);
+  const [loadingReviews, setLoadingReviews] = useState(true);
+
   // Guard
   useEffect(() => {
     // если user ещё не пришёл — просто не грузим
     if (!user) return;
     if (user.role !== "admin") return;
 
-    // по умолчанию грузим обе вкладки, чтобы переключение было мгновенным
+    // по умолчанию грузим все вкладки, чтобы переключение было мгновенным
     fetchPendingProjects();
     fetchUsers();
+    fetchReviews();
     // eslint-disable-next-line
   }, [user]);
 
@@ -81,9 +86,7 @@ function AdminPanel({ user }) {
     try {
       const res = await api.patch(`/api/admin/users/${id}/block`);
       // сервер может вернуть обновлённого пользователя — но мы обновим локально безопасно
-      setUsers((prev) =>
-        prev.map((u) => (u.id === id ? { ...u, isBlocked: true } : u))
-      );
+      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, isBlocked: true } : u)));
       return res.data;
     } catch (e) {
       console.error("Ошибка блокировки:", e);
@@ -94,9 +97,7 @@ function AdminPanel({ user }) {
   const unblockUser = async (id) => {
     try {
       const res = await api.patch(`/api/admin/users/${id}/unblock`);
-      setUsers((prev) =>
-        prev.map((u) => (u.id === id ? { ...u, isBlocked: false } : u))
-      );
+      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, isBlocked: false } : u)));
       return res.data;
     } catch (e) {
       console.error("Ошибка разблокировки:", e);
@@ -112,6 +113,32 @@ function AdminPanel({ user }) {
     } catch (e) {
       console.error("Ошибка смены роли:", e);
       alert("Не удалось сменить роль");
+    }
+  };
+
+  const fetchReviews = async () => {
+    setLoadingReviews(true);
+    try {
+      const res = await api.get("/api/admin/reviews");
+      setReviews(Array.isArray(res.data) ? res.data : []);
+    } catch (e) {
+      console.error("Ошибка загрузки отзывов:", e);
+      setReviews([]);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  const deleteReview = async (reviewId) => {
+    const ok = window.confirm("Удалить отзыв? Действие необратимо.");
+    if (!ok) return;
+
+    try {
+      await api.delete(`/api/admin/reviews/${reviewId}`);
+      setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+    } catch (e) {
+      console.error("Ошибка удаления отзыва:", e);
+      alert("Не удалось удалить отзыв");
     }
   };
 
@@ -146,6 +173,13 @@ function AdminPanel({ user }) {
             onClick={() => setTab("projects")}
           >
             🧾 Модерация проектов
+          </button>
+          <button
+            type="button"
+            className={`tab-btn ${tab === "reviews" ? "active" : ""}`}
+            onClick={() => setTab("reviews")}
+          >
+            📝 Модерация отзывов
           </button>
           <button
             type="button"
@@ -189,27 +223,68 @@ function AdminPanel({ user }) {
                         : "—"}
                     </span>
                     <span className="muted">
-                      Дата:{" "}
-                      {p.startDate
-                        ? new Date(p.startDate).toLocaleDateString("ru-RU")
-                        : "—"}
+                      Дата: {p.startDate ? new Date(p.startDate).toLocaleDateString("ru-RU") : "—"}
                     </span>
                   </div>
 
                   <div className="card-actions">
-                    <button
-                      type="button"
-                      className="admin-btn success"
-                      onClick={() => approveProject(p.id)}
-                    >
+                    <button type="button" className="admin-btn success" onClick={() => approveProject(p.id)}>
                       ✅ Одобрить
                     </button>
-                    <button
-                      type="button"
-                      className="admin-btn danger"
-                      onClick={() => rejectProject(p.id)}
-                    >
+                    <button type="button" className="admin-btn danger" onClick={() => rejectProject(p.id)}>
                       ❌ Отклонить
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {tab === "reviews" && (
+        <section className="admin-section">
+          <div className="section-header">
+            <h2>Отзывы</h2>
+            <button type="button" className="admin-btn" onClick={fetchReviews}>
+              🔄 Обновить
+            </button>
+          </div>
+
+          {loadingReviews ? (
+            <div className="admin-loading">Загрузка отзывов...</div>
+          ) : reviews.length === 0 ? (
+            <div className="admin-empty">Отзывов нет.</div>
+          ) : (
+            <div className="cards">
+              {reviews.map((r) => (
+                <div key={r.id} className="card">
+                  <div className="card-title">
+                    <strong>{r.project?.title || "Проект"}</strong>
+                    <span className="muted">ID: {r.id}</span>
+                  </div>
+
+                  <div className="card-meta">
+                    <span className="muted">
+                      Автор: {r.authorName || r.authorEmail || r.authorId || "—"}
+                    </span>
+                    <span className="muted">
+                      Дата: {r.createdAt ? new Date(r.createdAt).toLocaleDateString("ru-RU") : "—"}
+                    </span>
+                  </div>
+
+                  <div className="card-meta">
+                    <span className="muted">Рейтинг: ⭐ {r.rating}</span>
+                    <span className="muted">
+                      Проект ID: {r.projectId}
+                    </span>
+                  </div>
+
+                  {r.text && <p className="card-desc">{r.text}</p>}
+
+                  <div className="card-actions">
+                    <button type="button" className="admin-btn danger" onClick={() => deleteReview(r.id)}>
+                      🗑️ Удалить
                     </button>
                   </div>
                 </div>
@@ -236,7 +311,6 @@ function AdminPanel({ user }) {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-
           {loadingUsers ? (
             <div className="admin-loading">Загрузка пользователей...</div>
           ) : filteredUsers.length === 0 ? (
@@ -259,14 +333,9 @@ function AdminPanel({ user }) {
                     <tr key={u.id}>
                       <td>{u.id}</td>
                       <td>{u.email || "—"}</td>
+                      <td>{`${u.firstName || ""} ${u.lastName || ""}`.trim() || "—"}</td>
                       <td>
-                        {`${u.firstName || ""} ${u.lastName || ""}`.trim() || "—"}
-                      </td>
-                      <td>
-                        <select
-                          value={u.role}
-                          onChange={(e) => changeRole(u.id, e.target.value)}
-                        >
+                        <select value={u.role} onChange={(e) => changeRole(u.id, e.target.value)}>
                           <option value="volunteer">volunteer</option>
                           <option value="organizer">organizer</option>
                           <option value="admin">admin</option>
@@ -281,19 +350,11 @@ function AdminPanel({ user }) {
                       </td>
                       <td>
                         {u.isBlocked ? (
-                          <button
-                            type="button"
-                            className="admin-btn"
-                            onClick={() => unblockUser(u.id)}
-                          >
+                          <button type="button" className="admin-btn" onClick={() => unblockUser(u.id)}>
                             Разблокировать
                           </button>
                         ) : (
-                          <button
-                            type="button"
-                            className="admin-btn danger"
-                            onClick={() => blockUser(u.id)}
-                          >
+                          <button type="button" className="admin-btn danger" onClick={() => blockUser(u.id)}>
                             Заблокировать
                           </button>
                         )}
