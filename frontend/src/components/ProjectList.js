@@ -389,6 +389,26 @@ const saveEditReview = async (reviewId) => {
   }
 };
 
+const deleteMyReview = async (reviewId) => {
+  const ok = window.confirm("Удалить отзыв? Действие необратимо.");
+  if (!ok) return;
+
+  try {
+    await api.delete(`/api/projects/reviews/${reviewId}`);
+
+    // обновим список отзывов в модалке
+    const data = await getReviews(reviewsModalProject.id);
+    setReviewsList(data);
+
+    // обновим проекты, чтобы на карточке пересчитался рейтинг/кол-во отзывов
+    await fetchProjects();
+
+    // если вдруг удаляли отзыв, который был в режиме редактирования — сбросим режим
+    if (editingReviewId === reviewId) cancelEditReview();
+  } catch (e) {
+    alert(e?.response?.data?.message || e?.response?.data?.error || "Ошибка удаления отзыва");
+  }
+};
 
   const submitReview = async () => {
     try {
@@ -827,13 +847,17 @@ const saveEditReview = async (reviewId) => {
                 <div style={{ marginTop: 6, opacity: 0.7 }}>Без текста</div>
               )}
 
-              {user && String(r.authorId) === String(user.id) && editingReviewId !== r.id && (
-                <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
-                  <button className="btn" onClick={() => startEditReview(r)}>
-                    ✏️ Редактировать
-                  </button>
-                </div>
-              )}
+             {user && String(r.authorId) === String(user.id) && editingReviewId !== r.id && (
+  <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+    <button className="btn" onClick={() => startEditReview(r)}>
+      ✏️ Редактировать
+    </button>
+
+    <button className="btn btn-danger" onClick={() => deleteMyReview(r.id)}>
+      🗑️ Удалить
+    </button>
+  </div>
+)}
 
               <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
                 {new Date(r.createdAt).toLocaleString("ru-RU")}
