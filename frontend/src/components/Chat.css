@@ -372,3 +372,87 @@
   background: red;
   display: inline-block;
 }
+
+.chat-role-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-search-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+.chat-search-btn:hover {
+  background: rgba(0,0,0,0.06);
+}
+
+.chat-search-bar {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chat-search-input {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  min-width: 240px;
+}
+
+.chat-search-action {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+}
+
+.chat-search-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-search-nav button {
+  height: 34px;
+  width: 34px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+}
+
+.chat-search-count {
+  font-size: 13px;
+  opacity: 0.75;
+  min-width: 52px;
+  text-align: center;
+}
+
+.chat-search-close {
+  height: 34px;
+  width: 34px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+}
+
+.chat-highlight {
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+.msg-flash {
+  outline: 2px solid rgba(0, 123, 255, 0.55);
+  border-radius: 8px;
+}
