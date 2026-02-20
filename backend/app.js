@@ -112,7 +112,7 @@ app.use(
   (req, res, next) => {
     const isFavoritesRoute = req.path === "/favorites" || req.path.startsWith("/favorites/");
     const isReviewsRoute = req.path === "/reviews" || req.path.startsWith("/reviews/");
-    
+
     const isOrganizerCalendar = req.path.startsWith("/organizer/calendar");
     if (isOrganizerCalendar) return attachAuth(req, res, next);
 
@@ -121,8 +121,16 @@ app.use(
     // favorites: всегда с токеном
     if (isFavoritesRoute) return attachAuth(req, res, next);
 
-    // reviews: POST только с токеном
-    if (isReviewsRoute && req.method === "POST") return attachAuth(req, res, next);
+    // ✅ reviews:
+    // - GET /reviews/:projectId публично (без токена)
+    // - НО /reviews/my требует токен (иначе Missing x-user-id)
+    const isReviewsMy = req.path === "/reviews/my";
+    if (isReviewsMy) return attachAuth(req, res, next);
+
+    // reviews: POST/PUT/DELETE — только с токеном
+    if (isReviewsRoute && ["POST", "PUT", "DELETE"].includes(req.method)) {
+      return attachAuth(req, res, next);
+    }
 
     // обычные GET — без токена
     if (!isWriteMethod(req.method)) return next();
@@ -142,6 +150,16 @@ app.use(
 
     if (isFavoritesRoute) return requireRole(["volunteer", "admin"])(req, res, next);
 
+    // ✅ reviews:
+    const isReviewsMy = req.path === "/reviews/my";
+    if (isReviewsMy) return requireRole(["volunteer", "admin"])(req, res, next);
+
+    // PUT/DELETE отзыва — только volunteer/admin
+    if (isReviewsRoute && ["PUT", "DELETE"].includes(req.method)) {
+      return requireRole(["volunteer", "admin"])(req, res, next);
+    }
+
+    // POST отзыва — только volunteer/admin
     if (isReviewsRoute && req.method === "POST") {
       return requireRole(["volunteer", "admin"])(req, res, next);
     }

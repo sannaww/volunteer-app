@@ -545,7 +545,7 @@ ${profile.firstName} ${profile.lastName}
               <div className="profile-info">
                 <div className="info-grid">
                   <div className="info-item">
-                    <strong>Имя:</strong>
+                    <strong>Имя Фамилия:</strong>
                     <span>
                       {profile.firstName} {profile.lastName}
                     </span>

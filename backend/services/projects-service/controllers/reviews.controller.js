@@ -107,9 +107,62 @@ exports.deleteMyReview = async (req, res) => {
   }
 };
 
+
+// ✅ PUT /reviews/:id  (Редактировать мой отзыв)
+exports.updateMyReview = async (req, res) => {
+  try {
+    const userId = req.headers["x-user-id"];
+    const userRole = (req.headers["x-user-role"] || "").toLowerCase();
+    const reviewId = req.params.id;
+
+    if (!userId) return res.status(401).json({ message: "Missing x-user-id" });
+    if (userRole && userRole !== "volunteer") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const rating = Number(req.body.rating);
+    const text = req.body.text?.trim() || null;
+
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
+      return res.status(400).json({ message: "rating должен быть числом от 1 до 5" });
+    }
+    if (text && text.length > 1000) {
+      return res.status(400).json({ message: "text слишком длинный (макс 1000 символов)" });
+    }
+
+    const existing = await prisma.review.findUnique({
+      where: { id: reviewId },
+      select: { id: true, authorId: true, projectId: true },
+    });
+
+    if (!existing) return res.status(404).json({ message: "Review not found" });
+    if (existing.authorId !== String(userId)) {
+      return res.status(403).json({ message: "Вы можете редактировать только свой отзыв" });
+    }
+
+    const updated = await prisma.review.update({
+      where: { id: reviewId },
+      data: { rating, text },
+    });
+
+    const stats = await recalcProjectRating(existing.projectId);
+
+    return res.json({
+      message: "Review updated",
+      review: updated,
+      projectId: existing.projectId,
+      projectStats: stats,
+    });
+  } catch (err) {
+    console.error("updateMyReview error:", err);
+    return res.status(500).json({ message: "Server error", details: err.message });
+  }
+};
+
+
 // GET /reviews/:projectId
 exports.getReviewsByProject = async (req, res) => {
-    console.log("HIT getReviewsByProject", req.params.projectId);
+  console.log("HIT getReviewsByProject", req.params.projectId);
   try {
     const projectId = normalizeProjectId(req.params.projectId);
 
@@ -118,12 +171,34 @@ exports.getReviewsByProject = async (req, res) => {
       orderBy: { createdAt: "desc" },
     });
 
-    return res.json(reviews);
+    // ✅ подтягиваем имя автора (User.id — Int, Review.authorId — String)
+    const authorIds = [...new Set(
+      reviews
+        .map((r) => Number(r.authorId))
+        .filter((n) => Number.isFinite(n))
+    )];
+
+    const users = await prisma.user.findMany({
+      where: { id: { in: authorIds } },
+      select: { id: true, firstName: true, lastName: true },
+    });
+
+    const userMap = new Map(
+      users.map((u) => [u.id, `${u.firstName} ${u.lastName}`.trim()])
+    );
+
+    const enriched = reviews.map((r) => ({
+      ...r,
+      authorName: userMap.get(Number(r.authorId)) || "Пользователь",
+    }));
+
+    return res.json(enriched);
   } catch (err) {
     console.error("getReviewsByProject error:", err);
     return res.status(500).json({ message: "Server error", details: err.message });
   }
 };
+
 
 // POST /reviews/:projectId
 exports.createReview = async (req, res) => {
@@ -158,9 +233,7 @@ exports.createReview = async (req, res) => {
     }
 
     const checkUrl = `${APPLICATIONS_SERVICE_URL}/internal/check-approved?userId=${userIdInt}&projectId=${projectId}`;
-
     const checkRes = await fetch(checkUrl);
-
     if (!checkRes.ok) {
       const text = await checkRes.text();
       return res.status(502).json({
@@ -168,15 +241,12 @@ exports.createReview = async (req, res) => {
         details: text,
       });
     }
-
     const checkData = await checkRes.json();
-
     if (!checkData.canReview) {
       return res.status(403).json({
-        message: "Оставить отзыв можно только после одобрения заявки (APPROVED)",
+        message: "Оставить отзыв можно только после одобрения заявки.",
       });
     }
-
     // создаём отзыв (один на проект на пользователя)
     const review = await prisma.review.create({
       data: {
@@ -186,19 +256,15 @@ exports.createReview = async (req, res) => {
         text,
       },
     });
-
     // пересчитываем рейтинг проекта
     const stats = await recalcProjectRating(projectId);
-
     return res.status(201).json({ review, projectStats: stats });
   } catch (err) {
     console.error("createReview error:", err);
-
     // Prisma: нарушен @@unique([projectId, authorId]) → уже есть отзыв
     if (err.code === "P2002") {
       return res.status(409).json({ message: "Вы уже оставили отзыв на этот проект" });
     }
-
     return res.status(500).json({ message: "Server error", details: err.message });
   }
 };

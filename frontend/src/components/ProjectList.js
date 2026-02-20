@@ -44,6 +44,12 @@ const [reviewsList, setReviewsList] = useState([]);
 const [reviewsLoading, setReviewsLoading] = useState(false);
 const [reviewsError, setReviewsError] = useState("");
 
+// ✅ Редактирование отзыва (только своего)
+const [editingReviewId, setEditingReviewId] = useState(null);
+const [editRating, setEditRating] = useState(5);
+const [editText, setEditText] = useState("");
+
+
   // --- Helpers ---
   const showToast = (text) => {
     setToast(text);
@@ -353,6 +359,37 @@ const closeReviewsModal = () => {
   setReviewsError("");
 };
 
+// ✅ helpers для редактирования
+const startEditReview = (r) => {
+  setEditingReviewId(r.id);
+  setEditRating(r.rating);
+  setEditText(r.text || "");
+};
+
+const cancelEditReview = () => {
+  setEditingReviewId(null);
+  setEditRating(5);
+  setEditText("");
+};
+
+const saveEditReview = async (reviewId) => {
+  try {
+    await api.put(`/api/projects/reviews/${reviewId}`, {
+      rating: Number(editRating),
+      text: editText.trim(),
+    });
+
+    // обновим список отзывов
+    const data = await getReviews(reviewsModalProject.id);
+    setReviewsList(data);
+
+    cancelEditReview();
+  } catch (e) {
+    alert(e?.response?.data?.message || e?.response?.data?.error || "Ошибка обновления отзыва");
+  }
+};
+
+
   const submitReview = async () => {
     try {
       setReviewMsg("");
@@ -636,7 +673,7 @@ const closeReviewsModal = () => {
           ) : reviewAllowed === false ? (
             
             <div style={{ color: "crimson", marginTop: 10 }}>
-              Оставить отзыв можно только после одобрения заявки (APPROVED).
+              Оставить отзыв можно только после того, как организатор одобрит вашу заявку.
               <div style={{ marginTop: 12, textAlign: "right" }}>
                 <button className="btn" onClick={closeReviewModal}>Закрыть</button>
               </div>
@@ -747,7 +784,42 @@ const closeReviewsModal = () => {
                 padding: 12,
               }}
             >
-              <div style={{ fontWeight: 700 }}>⭐ {r.rating}</div>
+              <div style={{ fontWeight: 700 }}>{r.authorName || "Пользователь"}</div>
+
+              {editingReviewId === r.id ? (
+                <>
+                  <div style={{ marginTop: 8 }}>
+                    <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>Оценка:</label>
+                    <select value={editRating} onChange={(e) => setEditRating(e.target.value)} style={{ padding: 8, width: 120 }}>
+                      <option value={1}>1</option>
+                      <option value={2}>2</option>
+                      <option value={3}>3</option>
+                      <option value={4}>4</option>
+                      <option value={5}>5</option>
+                    </select>
+                  </div>
+
+                  <div style={{ marginTop: 10 }}>
+                    <label style={{ display: "block", marginBottom: 6, fontWeight: 600 }}>Комментарий:</label>
+                    <textarea
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      rows={3}
+                      style={{ width: "100%", padding: 10, borderRadius: 8 }}
+                    />
+                  </div>
+                <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button className="btn btn-primary" onClick={() => saveEditReview(r.id)}>
+                      Сохранить
+                    </button>
+                    <button className="btn" onClick={cancelEditReview}>
+                      Отмена
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontWeight: 700 }}>⭐ {r.rating}</div>
 
               {r.text ? (
                 <div style={{ marginTop: 6 }}>{r.text}</div>
@@ -755,9 +827,20 @@ const closeReviewsModal = () => {
                 <div style={{ marginTop: 6, opacity: 0.7 }}>Без текста</div>
               )}
 
+              {user && String(r.authorId) === String(user.id) && editingReviewId !== r.id && (
+                <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
+                  <button className="btn" onClick={() => startEditReview(r)}>
+                    ✏️ Редактировать
+                  </button>
+                </div>
+              )}
+
               <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
                 {new Date(r.createdAt).toLocaleString("ru-RU")}
               </div>
+                </>
+              )}
+
             </div>
           ))}
         </div>
