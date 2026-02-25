@@ -73,14 +73,12 @@ exports.createProject = async (req, res) => {
       return res.status(403).json({ error: 'Недостаточно прав' });
     }
 
-    // В дипломной логике: организатор создаёт черновик (модерация)
     const payload = {
       ...req.body,
       status: req.body.status || 'DRAFT',
       createdBy: userId
     };
 
-    // если кто-то пытается сразу ACTIVE — запретим организатору (admin может)
     if (payload.status === 'ACTIVE' && role !== 'admin') {
       payload.status = 'DRAFT';
     }
@@ -109,17 +107,15 @@ exports.updateProject = async (req, res) => {
     const existing = await projectsService.getProjectById(id);
     if (!existing) return res.status(404).json({ error: 'Проект не найден' });
 
-    // права: admin или создатель проекта
     if (role !== 'admin' && existing.createdBy !== userId) {
       return res.status(403).json({ error: 'Недостаточно прав' });
     }
 
-    // организатор не может сам ставить ACTIVE (это делает админ approve)
     const updateData = { ...req.body };
     if (role !== 'admin' && updateData.status === 'ACTIVE') {
-      updateData.status = existing.status; // игнорируем попытку
+      updateData.status = existing.status;
     }
-    
+
     try {
       validateDatesPayload(updateData);
     } catch (e) {
@@ -156,7 +152,7 @@ exports.deleteProject = async (req, res) => {
   }
 };
 
-// Календарь мероприятий организатора
+// Календарь мероприятий организатора / администратора
 // GET /organizer/calendar?month=YYYY-MM
 exports.getOrganizerCalendar = async (req, res) => {
   try {
@@ -178,23 +174,29 @@ exports.getOrganizerCalendar = async (req, res) => {
     const start = new Date(year, mon - 1, 1, 0, 0, 0);
     const end = new Date(year, mon, 1, 0, 0, 0); // 1-е число следующего месяца
 
-    // Берём проекты организатора, которые пересекают месяц
-    // startDate < end && endDate >= start
+    // organizer -> только свои проекты
+    // admin -> ВСЕ проекты (без фильтра по creatorId)
+    const organizerId = role === "admin" ? null : userId;
+
     const projects = await projectsService.getOrganizerProjectsForCalendar({
-      organizerId: userId,
+      organizerId,
       start,
       end,
+      role, // передаём на случай, если сервис умеет учитывать роль
     });
 
     return res.json({
       month,
+      mode: role === "admin" ? "admin_all_projects" : "organizer_own_projects",
       range: { start, end },
       projects,
     });
   } catch (error) {
     console.error("getOrganizerCalendar error:", error);
-    res.status(500).json({ error: "Ошибка получения календаря",
-    details: error.message, });
+    res.status(500).json({
+      error: "Ошибка получения календаря",
+      details: error.message,
+    });
   }
 };
 
@@ -213,7 +215,8 @@ exports.getOrganizerProjects = async (req, res) => {
     const search = (req.query.search || "").toString();
 
     const projects = await projectsService.getOrganizerProjects({
-      organizerId: userId,
+      organizerId: role === "admin" ? null : userId, // admin может видеть все в этом списке (если сервис поддерживает)
+      role,
       status,
       includeDrafts,
       search,
