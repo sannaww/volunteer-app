@@ -53,15 +53,13 @@ function Navbar({ user, onLogout }) {
     });
 
     s.on("unread:count", ({ total }) => {
-  setTotalUnread(Number(total) || 0);
-});
-
+      setTotalUnread(Number(total) || 0);
+    });
 
     // Если вдруг переподключение/ошибка
     s.on("connect_error", (e) => {
       console.log("Navbar WS error:", e.message);
     });
-    
 
     return () => {
       s.disconnect();
@@ -86,6 +84,7 @@ function Navbar({ user, onLogout }) {
       </div>
 
       <div className="navbar-links">
+        {/* Общая вкладка для всех */}
         <Link to="/">Все проекты</Link>
 
         {user ? (
@@ -123,7 +122,6 @@ function Navbar({ user, onLogout }) {
           </>
         ) : (
           <>
-            <Link to="/">Все проекты</Link>
             <Link to="/login">Войти</Link>
             <Link to="/register">Регистрация</Link>
           </>
