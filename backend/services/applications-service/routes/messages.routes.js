@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../prismaClient');
 const axios = require('axios');
+const GATEWAY_URL = process.env.GATEWAY_URL || "http://localhost:5000";
 // --- helpers ---
 function normalizeRole(role) {
   if (!role) return 'unknown';
@@ -20,7 +21,7 @@ async function getUserPublicById(userId, token) {
   // Важно: мы обращаемся к auth-service через gateway,
   // чтобы сохранить единые правила и не знать портов напрямую.
   // Gateway ждёт /api/auth/users/:id
-  const resp = await axios.get(`http://localhost:5000/api/auth/users/${userId}`, {
+  const resp = await axios.get(`${GATEWAY_URL}/api/auth/users/${userId}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   const value = resp.data;

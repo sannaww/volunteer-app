@@ -1,7 +1,12 @@
-require("dotenv").config({ path: require("path").join(__dirname, "..", "..", ".env") });
 const path = require("path");
 const express = require('express');
 const cors = require('cors');
+
+try {
+  require("dotenv").config({ path: path.join(__dirname, "..", "..", ".env") });
+} catch (error) {
+  // dotenv is optional when env vars are injected by container runtime
+}
 
 const app = express();
 
@@ -13,6 +18,8 @@ const internalPointsRoutes = require("./routes/internalPoints.routes");
 app.use('/', authRoutes);
 app.use("/internal", internalPointsRoutes);
 
-app.listen(5001, () => {
-  console.log('Auth Service running on port 5001');
+const PORT = Number(process.env.PORT) || 5001;
+
+app.listen(PORT, () => {
+  console.log(`Auth Service running on port ${PORT}`);
 });

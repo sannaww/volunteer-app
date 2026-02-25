@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
+import api from "../api/client";
 import "./Profile.css";
 
 import OrganizerStats from "./OrganizerStats";
@@ -60,11 +60,7 @@ function Profile({ user, onUserUpdate }) {
         const token = sessionStorage.getItem("token");
         if (!token) return;
 
-        const response = await axios.get("http://localhost:5000/api/auth/me", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await api.get("/api/auth/me");
 
         const userData = response.data;
 
@@ -146,14 +142,7 @@ function Profile({ user, onUserUpdate }) {
       const token = sessionStorage.getItem("token");
       if (!token) return;
 
-      const response = await axios.get(
-        "http://localhost:5000/api/profile/participation-history",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await api.get("/api/profile/participation-history");
 
       setParticipationHistory(response.data);
     } catch (error) {
@@ -172,22 +161,14 @@ function Profile({ user, onUserUpdate }) {
         return;
       }
 
-      const response = await axios.put(
-        "http://localhost:5000/api/profile",
-        {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          phone: formData.phone,
-          skills: formData.skills,
-          interests: formData.interests,
-          bio: formData.bio,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await api.put("/api/profile", {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        skills: formData.skills,
+        interests: formData.interests,
+        bio: formData.bio,
+      });
 
       const updatedFields = response.data;
 
@@ -290,12 +271,7 @@ function Profile({ user, onUserUpdate }) {
     }
 
     try {
-      const token = sessionStorage.getItem("token");
-      await axios.delete("http://localhost:5000/api/auth/account", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      await api.delete("/api/auth/account");
 
       alert("Аккаунт успешно удален");
       sessionStorage.removeItem("token");

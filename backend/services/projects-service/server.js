@@ -1,7 +1,12 @@
-require("dotenv").config({ path: require("path").join(__dirname, "..", "..", ".env") });
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
+
+try {
+  require("dotenv").config({ path: path.join(__dirname, "..", "..", ".env") });
+} catch (error) {
+  // dotenv is optional when env vars are injected by container runtime
+}
 
 const projectsRoutes = require("./routes/projects.routes");
 const favoritesRoutes = require("./routes/favorites.routes");
@@ -21,7 +26,7 @@ app.use("/reviews", reviewsRoutes);
 // ВАЖНО — без /api/projects
 app.use("/", projectsRoutes);
 
-const PORT = 5002;
+const PORT = Number(process.env.PORT) || 5002;
 
 app.listen(PORT, () => {
   console.log(`Projects Service running on port ${PORT}`);

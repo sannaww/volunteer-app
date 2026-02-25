@@ -1,6 +1,7 @@
 const prisma = require("../prismaClient");
 
-const APPLICATIONS_SERVICE_URL = "http://localhost:5003";
+const APPLICATIONS_SERVICE_URL =
+  process.env.APPLICATIONS_SERVICE_URL || "http://localhost:5003";
 
 // projectId в schema.prisma: Int
 function parseProjectId(projectIdParam) {

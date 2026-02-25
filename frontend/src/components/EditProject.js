@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from "../api/client";
 import { useParams, useNavigate } from 'react-router-dom';
 import './CreateProject.css'; // Используем те же стили
 
@@ -37,12 +37,7 @@ function EditProject({ user }) {
 
   const fetchProject = async () => {
     try {
-      const token = sessionStorage.getItem('token');
-      const response = await axios.get(`http://localhost:5000/api/projects/${id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await api.get(`/api/projects/${id}`);
 
       const project = response.data;
       setFormData({
@@ -77,7 +72,6 @@ function EditProject({ user }) {
     setSaving(true);
 
     try {
-      const token = sessionStorage.getItem('token');
       const dataToSend = {
         ...formData,
         volunteersRequired: parseInt(formData.volunteersRequired),
@@ -85,12 +79,7 @@ function EditProject({ user }) {
         endDate: formData.endDate || null
       };
 
-      await axios.put(`http://localhost:5000/api/projects/${id}`, dataToSend, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      await api.put(`/api/projects/${id}`, dataToSend);
 
       alert('Проект успешно обновлен!');
       navigate('/profile'); // Возвращаемся в профиль

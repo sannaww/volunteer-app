@@ -1,6 +1,6 @@
 const prisma = require("../prismaClient");
-const AUTH_SERVICE_URL = "http://localhost:5001";
-const POINTS_FOR_APPROVE = 10; // сколько баллов даём за одобренную заявку
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || "http://localhost:5001";
+const POINTS_FOR_APPROVE = Number(process.env.POINTS_FOR_APPROVE || 10); // сколько баллов даём за одобренную заявку
 
 // Создать заявку (volunteer)
 exports.createApplication = async ({ userId, projectId, message }) => {
@@ -117,10 +117,6 @@ if (newStatus === "APPROVED") {
   });
 
   if (!already) {
-
-    const AUTH_SERVICE_URL = "http://localhost:5001";
-    const POINTS_FOR_APPROVE = 10;
-
     // вызываем auth-service
     const resp = await fetch(`${AUTH_SERVICE_URL}/internal/add-points`, {
       method: "POST",

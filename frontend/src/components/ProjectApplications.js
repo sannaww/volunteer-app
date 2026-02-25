@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from "../api/client";
 import { useParams } from 'react-router-dom';
 import './ProjectApplications.css';
 
@@ -23,16 +23,7 @@ function ProjectApplications({ user }) {
 
   const fetchApplications = async () => {
     try {
-      const token = sessionStorage.getItem('token');
-
-      const response = await axios.get(
-        `http://localhost:5000/api/applications/project/${projectId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
+      const response = await api.get(`/api/applications/project/${projectId}`);
 
       setApplications(response.data);
       setLoading(false);
@@ -45,17 +36,7 @@ function ProjectApplications({ user }) {
 
   const handleApprove = async (applicationId) => {
     try {
-      const token = sessionStorage.getItem('token');
-
-      await axios.patch(
-        `http://localhost:5000/api/applications/${applicationId}/approve`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
+      await api.patch(`/api/applications/${applicationId}/approve`, {});
 
       fetchApplications();
     } catch (error) {
@@ -65,17 +46,7 @@ function ProjectApplications({ user }) {
 
   const handleReject = async (applicationId) => {
     try {
-      const token = sessionStorage.getItem('token');
-
-      await axios.patch(
-        `http://localhost:5000/api/applications/${applicationId}/reject`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
+      await api.patch(`/api/applications/${applicationId}/reject`, {});
 
       fetchApplications();
     } catch (error) {

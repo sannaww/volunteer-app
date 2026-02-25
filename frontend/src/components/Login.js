@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import axios from "axios";
 import { useNavigate, useLocation, Link } from "react-router-dom";
+import api from "../api/client";
 import "./Auth.css";
 
 function Login({ onLogin }) {
@@ -48,13 +48,10 @@ function Login({ onLogin }) {
 
     setLoading(true);
     try {
-      const response = await axios.post(
-        "http://localhost:5000/api/auth/login",
-        {
-          email: formData.email.trim(),
-          password: formData.password,
-        }
-      );
+      const response = await api.post("/api/auth/login", {
+        email: formData.email.trim(),
+        password: formData.password,
+      });
 
       sessionStorage.setItem("token", response.data.token);
       sessionStorage.setItem("user", JSON.stringify(response.data.user));

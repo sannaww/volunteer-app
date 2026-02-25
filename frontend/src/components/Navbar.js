@@ -123,7 +123,6 @@ function Navbar({ user, onLogout }) {
           </>
         ) : (
           <>
-            <Link to="/">Все проекты</Link>
             <Link to="/login">Войти</Link>
             <Link to="/register">Регистрация</Link>
           </>

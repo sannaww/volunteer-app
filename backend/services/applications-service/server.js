@@ -1,4 +1,3 @@
-require("dotenv").config({ path: require("path").join(__dirname, "..", "..", ".env") });
 const path = require("path");
 const express = require("express");
 const cors = require("cors");
@@ -14,12 +13,22 @@ const messagesRoutes = require("./routes/messages.routes");
 const internalRoutes = require("./routes/internal.routes");
 const reviewEligibilityRoutes = require("./routes/reviewEligibility.routes");
 
+try {
+  require("dotenv").config({ path: path.join(__dirname, "..", "..", ".env") });
+} catch (error) {
+  // dotenv is optional when env vars are injected by container runtime
+}
+
 const app = express();
+const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 // CORS для HTTP
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: corsOrigins,
     credentials: true,
   })
 );
@@ -40,7 +49,7 @@ const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 // Socket.IO сервер
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: corsOrigins,
     credentials: true,
   },
 });
@@ -221,6 +230,8 @@ io.on("connection", (socket) => {
 });
 
 // слушаем тот же порт
-server.listen(5003, () => {
-  console.log("Applications Service (HTTP+WS) running on port 5003");
+const PORT = Number(process.env.PORT) || 5003;
+
+server.listen(PORT, () => {
+  console.log(`Applications Service (HTTP+WS) running on port ${PORT}`);
 });

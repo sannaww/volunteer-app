@@ -5,13 +5,20 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 
 const app = express();
 
-// Пока оставляем как у тебя в сервисах (позже вынесем в .env)
-const JWT_SECRET = "your-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || "http://localhost:5001";
+const PROJECTS_SERVICE_URL = process.env.PROJECTS_SERVICE_URL || "http://localhost:5002";
+const APPLICATIONS_SERVICE_URL = process.env.APPLICATIONS_SERVICE_URL || "http://localhost:5003";
+const ADMIN_SERVICE_URL = process.env.ADMIN_SERVICE_URL || "http://localhost:5004";
+const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 // Global middleware
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: corsOrigins,
     credentials: true,
   })
 );
@@ -70,7 +77,7 @@ app.use(
   attachAuth,
   requireRole(["volunteer", "admin"]),
   createProxyMiddleware({
-    target: "http://localhost:5002",
+    target: PROJECTS_SERVICE_URL,
     changeOrigin: true,
 
     // ⭐ вот ключ: всегда проксируем полный путь
@@ -86,7 +93,7 @@ app.use(
 app.use(
   "/api/auth",
   createProxyMiddleware({
-    target: "http://localhost:5001",
+    target: AUTH_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: { "^/api/auth": "" },
   })
@@ -97,7 +104,7 @@ app.use(
   "/api/profile",
   attachAuth,
   createProxyMiddleware({
-    target: "http://localhost:5001",
+    target: AUTH_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: (path) => {
       if (path === "/" || path === "") return "/profile";
@@ -169,7 +176,7 @@ app.use(
     return requireRole(["organizer", "admin"])(req, res, next);
   },
   createProxyMiddleware({
-    target: "http://localhost:5002",
+    target: PROJECTS_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: { "^/api/projects": "" },
   })
@@ -194,7 +201,7 @@ app.use(
     return next();
   },
   createProxyMiddleware({
-    target: "http://localhost:5003",
+    target: APPLICATIONS_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: { "^/api/applications": "" },
   })
@@ -206,7 +213,7 @@ app.use(
   attachAuth,
   requireRole(["admin"]),
   createProxyMiddleware({
-    target: "http://localhost:5004",
+    target: ADMIN_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: { "^/api/admin": "" },
   })
@@ -217,7 +224,7 @@ app.use(
   "/api/messages",
   attachAuth,
   createProxyMiddleware({
-    target: "http://localhost:5003",
+    target: APPLICATIONS_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: (path) => `/messages${path}`,
   })
@@ -227,7 +234,7 @@ app.use(
 app.use(
   "/socket.io",
   createProxyMiddleware({
-    target: "http://localhost:5003",
+    target: APPLICATIONS_SERVICE_URL,
     changeOrigin: true,
     ws: true, // 🔥 вот это включает проксирование WebSocket upgrade
   })
