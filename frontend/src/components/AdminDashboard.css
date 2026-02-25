@@ -1,0 +1,154 @@
+.admin-mini {
+  padding: 8px 0;
+}
+
+.admin-mini-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.admin-mini-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-mini-btn {
+  border: 1px solid #ddd;
+  background: #fff;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.admin-mini-btn.primary {
+  border-color: #2b6cb0;
+}
+
+.admin-mini-btn.success {
+  border-color: #1f8a70;
+}
+
+.admin-mini-btn.danger {
+  border-color: #d64545;
+}
+
+.admin-mini-loading {
+  padding: 14px;
+}
+
+.admin-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.admin-mini-card {
+  border: 1px solid #eee;
+  border-radius: 14px;
+  padding: 12px;
+  background: #fff;
+}
+
+.card-title {
+  color: #666;
+  font-size: 13px;
+}
+
+.card-value {
+  font-size: 26px;
+  margin-top: 4px;
+}
+
+.admin-mini-sections {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 12px;
+}
+
+.admin-mini-section {
+  border: 1px solid #eee;
+  border-radius: 14px;
+  padding: 12px;
+  background: #fff;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.admin-mini-search {
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  width: 260px;
+  max-width: 60%;
+}
+
+.mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mini-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid #f2f2f2;
+  padding-bottom: 8px;
+}
+
+.mini-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mini-users {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.user-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid #f2f2f2;
+  padding-bottom: 8px;
+}
+
+.user-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.user-controls select {
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+}
+
+.muted {
+  color: #777;
+}
+
+.small {
+  font-size: 12px;
+}
+
+.empty {
+  color: #666;
+  padding: 8px 0;
+}

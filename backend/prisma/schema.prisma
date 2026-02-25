@@ -6,6 +6,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -18,6 +19,10 @@ model User {
   emailVerified          Boolean  @default(false)
   emailVerificationToken String?
   createdAt              DateTime @default(now())
+  points Int @default(0)
+
+  // ✅ Новое поле для администратора (блокировка пользователя)
+  isBlocked Boolean @default(false)
 
   // Новые поля для личного кабинета
   phone     String?
@@ -29,19 +34,21 @@ model User {
   // Связи
   projectsCreated Project[]     @relation("ProjectCreator")
   applications    Application[]
-  sentMessages     Message[] @relation("SentMessages")
-  receivedMessages Message[] @relation("ReceivedMessages")
-
 
   @@map("users")
 }
 
 model Project {
-  id          Int           @id @default(autoincrement())
-  title       String
-  description String
-  status      ProjectStatus @default(ACTIVE)
-  createdAt   DateTime      @default(now())
+  id           Int           @id @default(autoincrement())
+  title        String
+  description  String
+  status       ProjectStatus @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  favorites    Favorite[]
+  avgRating    Float         @default(0)
+  reviewsCount Int           @default(0)
+
+  reviews Review[]
 
   // Новые поля для фильтрации
   startDate          DateTime?
@@ -55,7 +62,6 @@ model Project {
   createdBy    Int
   creator      User          @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: Cascade)
   applications Application[]
-  messages     Message[]
 
   @@map("projects")
 }
@@ -70,6 +76,19 @@ enum ProjectType {
   SPORTS
   MEDICAL
   OTHER
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  projectId Int
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, projectId])
+  @@index([userId])
+  @@index([projectId])
 }
 
 model Application {
@@ -100,21 +119,48 @@ enum ApplicationStatus {
   APPROVED
   REJECTED
 }
-model Message {
-  id        Int      @id @default(autoincrement())
-  text      String
-  createdAt DateTime @default(now())
-  
-  senderId  Int
-  sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  
-  receiverId Int
-  receiver  User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
-  
-  projectId Int?
-  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  isRead    Boolean  @default(false)
 
-  @@map("messages")
+model Message {
+  id          Int       @id @default(autoincrement())
+  senderId    Int
+  receiverId  Int
+  text        String
+  createdAt   DateTime  @default(now())
+
+  deliveredAt DateTime?
+  readAt      DateTime?
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
+  @@index([deliveredAt])
+  @@index([readAt])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  projectId Int
+  authorId  String
+  rating    Int
+  text      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, authorId])
+  @@index([projectId])
+  @@index([authorId])
+}
+
+model PointsLog {
+  id            String   @id @default(cuid())
+  userId        Int
+  applicationId Int
+  points        Int
+  reason        String?
+  createdAt     DateTime @default(now())
+
+  @@unique([applicationId]) // на одну заявку — один раз
+  @@index([userId])
 }

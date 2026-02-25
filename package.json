@@ -3,16 +3,24 @@
   "version": "1.0.0",
   "description": "Volunteer platform - course project",
   "scripts": {
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "cd backend && npm run dev",
+    "dev": "concurrently -n AUTH,PROJECTS,APPS,ADMIN,GATEWAY,FRONT -c auto \"npm run dev:auth\" \"npm run dev:projects\" \"npm run dev:apps\" \"npm run dev:admin\" \"npm run dev:gateway\" \"npm run dev:frontend\"",
+    "dev:auth": "cd backend/services/auth-service && node server.js",
+    "dev:projects": "cd backend/services/projects-service && node server.js",
+    "dev:apps": "cd backend/services/applications-service && node server.js",
+    "dev:admin": "cd backend/services/admin-service && node server.js",
+    "dev:gateway": "cd backend && npm run dev",
     "dev:frontend": "cd frontend && npm start",
-    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install && cd ../backend/services/auth-service && npm install && cd ../projects-service && npm install && cd ../applications-service && npm install && cd ../admin-service && npm install",
     "build": "cd frontend && npm run build"
   },
   "devDependencies": {
     "concurrently": "^7.6.0"
   },
-  "keywords": ["volunteer", "react", "nodejs"],
+  "keywords": [
+    "volunteer",
+    "react",
+    "nodejs"
+  ],
   "author": "Your Name",
   "license": "MIT"
 }

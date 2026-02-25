@@ -173,6 +173,25 @@
   display: block;
 }
 
+.message-meta {
+  display: flex;
+  justify-content: flex-end; /* ✅ вправо */
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.message-time {
+  font-size: 12px; /* ✅ меньше */
+  opacity: 0.7;
+}
+
+.message-status {
+  font-size: 12px; /* ✅ под размер времени */
+  opacity: 0.8;
+  user-select: none;
+}
+
 .message-input-form {
   display: flex;
   padding: 1rem;
@@ -290,4 +309,150 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.conversation-delete-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+  margin-left: 8px;
+}
+
+.conversation-delete-btn:hover {
+  opacity: 1;
+}
+
+.chat-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-delete-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  opacity: 0.6;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.chat-delete-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* ✅ Текст сообщения всегда по левому краю */
+.message-content,
+.message-content p {
+  text-align: left !important;
+}
+
+/* чтобы длинные слова/ссылки не ломали верстку */
+.message-content p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-link-with-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nav-badge-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: red;
+  display: inline-block;
+}
+
+.chat-role-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-search-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 8px;
+}
+.chat-search-btn:hover {
+  background: rgba(0,0,0,0.06);
+}
+
+.chat-search-bar {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chat-search-input {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  min-width: 240px;
+}
+
+.chat-search-action {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+}
+
+.chat-search-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-search-nav button {
+  height: 34px;
+  width: 34px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+}
+
+.chat-search-count {
+  font-size: 13px;
+  opacity: 0.75;
+  min-width: 52px;
+  text-align: center;
+}
+
+.chat-search-close {
+  height: 34px;
+  width: 34px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  background: #fff;
+  cursor: pointer;
+}
+
+.chat-highlight {
+  padding: 0 2px;
+  border-radius: 4px;
+}
+
+.msg-flash {
+  outline: 2px solid rgba(0, 123, 255, 0.55);
+  border-radius: 8px;
 }
