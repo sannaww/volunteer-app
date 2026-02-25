@@ -105,7 +105,7 @@ function Navbar({ user, onLogout }) {
 
             {user?.role === "admin" && (
               <Link to="/admin" className="nav-link">
-                Админ
+                Админ-панель
               </Link>
             )}
 
