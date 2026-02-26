@@ -19,6 +19,17 @@ import OrganizerCalendar from "./components/OrganizerCalendar";
 
 import "./App.css";
 
+function normalizeUserRole(userData) {
+  if (!userData || typeof userData !== "object") return userData;
+  const normalizedRole = userData.role
+    ? String(userData.role).trim().toLowerCase()
+    : userData.role;
+  return {
+    ...userData,
+    role: normalizedRole,
+  };
+}
+
 // ✅ защищённый доступ: если нет user -> /login, но запоминаем куда хотели попасть
 function RequireAuth({ user, loading, children }) {
   const location = useLocation();
@@ -70,7 +81,8 @@ function App() {
         const savedUser = sessionStorage.getItem("user");
         if (savedUser) {
           try {
-            setUser(JSON.parse(savedUser));
+            const parsedUser = JSON.parse(savedUser);
+            setUser(normalizeUserRole(parsedUser));
           } catch {
             // ignore
           }
@@ -78,8 +90,9 @@ function App() {
 
         // 2) источник истины — backend (роль/имя/блокировка и т.д.)
         const res = await api.get("/api/auth/me");
-        setUser(res.data);
-        sessionStorage.setItem("user", JSON.stringify(res.data));
+        const normalizedUser = normalizeUserRole(res.data);
+        setUser(normalizedUser);
+        sessionStorage.setItem("user", JSON.stringify(normalizedUser));
       } catch (error) {
         console.error("Ошибка инициализации пользователя:", error);
         sessionStorage.removeItem("token");
@@ -94,8 +107,9 @@ function App() {
   }, []);
 
   const handleLogin = (userData) => {
-    setUser(userData);
-    sessionStorage.setItem("user", JSON.stringify(userData));
+    const normalizedUser = normalizeUserRole(userData);
+    setUser(normalizedUser);
+    sessionStorage.setItem("user", JSON.stringify(normalizedUser));
   };
 
   const handleLogout = () => {
@@ -105,8 +119,9 @@ function App() {
   };
 
   const handleUserUpdate = (updatedUser) => {
-    setUser(updatedUser);
-    sessionStorage.setItem("user", JSON.stringify(updatedUser));
+    const normalizedUser = normalizeUserRole(updatedUser);
+    setUser(normalizedUser);
+    sessionStorage.setItem("user", JSON.stringify(normalizedUser));
   };
 
   return (

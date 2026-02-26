@@ -274,6 +274,13 @@ const [editText, setEditText] = useState("");
     return `status-${String(status).toLowerCase()}`;
   };
 
+  const canManageProject = (project) => {
+    if (!user) return false;
+    const userRole = String(user.role || "").trim().toLowerCase();
+    if (userRole === "admin") return true;
+    return String(user.id) === String(project.createdBy);
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'Не указана';
     return new Date(dateString).toLocaleDateString('ru-RU');
@@ -606,7 +613,7 @@ const deleteMyReview = async (reviewId) => {
   📖 Отзывы
 </button>
 
-              {user && user.id === project.createdBy && (
+              {canManageProject(project) && (
                 <>
                   <button
                     className="btn btn-warning"
@@ -623,7 +630,7 @@ const deleteMyReview = async (reviewId) => {
                 </>
               )}
 
-              {user && user.id === project.createdBy && (
+              {canManageProject(project) && (
                 <button
                   className="btn btn-success"
                   onClick={() => window.location.href = `/project-applications/${project.id}`}
