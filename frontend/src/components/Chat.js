@@ -30,7 +30,7 @@ function Chat({ user }) {
   const messagesContainerRef = useRef(null);
   const socketRef = useRef(null);
 
-  // ✅ FIX: searchInputRef должен существовать
+  // FIX: searchInputRef должен существовать
   const searchInputRef = useRef(null);
 
   // refs to avoid stale closures in socket callbacks
@@ -47,7 +47,7 @@ function Chat({ user }) {
     activeConvRef.current = activeConversation;
   }, [activeConversation]);
 
-  // -------- helpers --------
+  //helpers
   const displayName = (u) => {
     if (!u) return "Пользователь";
     if (u.firstName && u.lastName) return `${u.firstName} ${u.lastName}`;
@@ -101,7 +101,7 @@ function Chat({ user }) {
     setMessages((prev) => prev.map((m) => (setIds.has(m.id) ? { ...m, ...patch } : m)));
   };
 
-  // -------- search helpers --------
+  //search helpers
   const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
   const highlightText = (text, q) => {
@@ -237,7 +237,7 @@ function Chat({ user }) {
     if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 0);
   }, [searchOpen]);
 
-  // -------- data loading --------
+  //data loading
   const fetchConversations = async () => {
     const currentUser = userRef.current;
     if (!currentUser) return;
@@ -314,7 +314,7 @@ function Chat({ user }) {
     if (container.scrollTop <= 80) loadMoreMessages();
   };
 
-  // -------- lifecycle --------
+  //lifecycle
   useEffect(() => {
     if (!user) {
       navigate("/login");
@@ -358,7 +358,7 @@ function Chat({ user }) {
     window.dispatchEvent(new Event("unread:update"));
   }
 
-  // -------- Socket.IO connect (once) --------
+  //Socket.IO connect (once)
   useEffect(() => {
     const s = createSocket();
     socketRef.current = s;
@@ -454,7 +454,7 @@ function Chat({ user }) {
     }
   }, [activeConversation, user]);
 
-  // -------- conversation actions --------
+  //conversation actions
   const handleSelectConversation = (conversation) => {
     setActiveConversation(conversation);
   };
@@ -483,7 +483,7 @@ function Chat({ user }) {
     setActiveConversation(newConversation);
   };
 
-  // -------- send message --------
+  //send message
   const handleSendMessage = async (e) => {
     e.preventDefault();
 
