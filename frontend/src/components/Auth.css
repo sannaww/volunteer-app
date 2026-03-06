@@ -1,16 +1,49 @@
 .auth-container {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 80vh;
+  min-height: calc(100vh - 72px);
   padding: 2rem;
+  background:
+    radial-gradient(1100px 460px at 15% 20%, rgba(69, 139, 255, 0.24), transparent 60%),
+    radial-gradient(900px 440px at 85% 85%, rgba(32, 207, 255, 0.2), transparent 65%),
+    linear-gradient(135deg, #eaf6ff 0%, #d8ecff 35%, #d0e6ff 60%, #e7f5ff 100%);
+}
+
+.auth-container::before,
+.auth-container::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.auth-container::before {
+  width: 460px;
+  height: 460px;
+  top: -140px;
+  right: -120px;
+  background: radial-gradient(circle at 30% 30%, rgba(92, 178, 255, 0.55), rgba(92, 178, 255, 0) 70%);
+}
+
+.auth-container::after {
+  width: 380px;
+  height: 380px;
+  left: -110px;
+  bottom: -120px;
+  background: radial-gradient(circle at 65% 40%, rgba(58, 146, 255, 0.35), rgba(58, 146, 255, 0) 72%);
 }
 
 .auth-form {
-  background: white;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(245, 251, 255, 0.98) 100%);
+  border: 1px solid rgba(94, 146, 214, 0.25);
   padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(30, 95, 165, 0.18);
   width: 100%;
   max-width: 400px;
 }
@@ -45,17 +78,18 @@
 .auth-btn {
   width: 100%;
   padding: 1rem;
-  background-color: #3498db;
+  background: linear-gradient(135deg, #2f8ae9 0%, #1d76d2 100%);
   color: white;
   border: none;
   border-radius: 4px;
   font-size: 1.1rem;
   cursor: pointer;
-  transition: background-color 0.3s;
+  transition: transform 0.15s ease, filter 0.2s ease;
 }
 
 .auth-btn:hover {
-  background-color: #2980b9;
+  transform: translateY(-1px);
+  filter: brightness(1.05);
 }
 
 .auth-link {
@@ -93,4 +127,16 @@
 .auth-btn:disabled {
   background-color: #95a5a6;
   cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .auth-container {
+    min-height: calc(100vh - 64px);
+    padding: 1.2rem;
+  }
+
+  .auth-form {
+    padding: 1.25rem;
+    border-radius: 12px;
+  }
 }
