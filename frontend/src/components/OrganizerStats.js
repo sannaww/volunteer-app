@@ -1,134 +1,104 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import api from "../api/client";
+import { formatDate } from "../utils/formatters";
+import {
+  getApplicationStatusMeta,
+  getProjectStatusMeta,
+} from "../utils/presentation";
+import EmptyState from "./ui/EmptyState";
+import Icon from "./ui/Icon";
+import StatusPill from "./ui/StatusPill";
+import { useFeedback } from "./ui/FeedbackProvider";
 import "./OrganizerStats.css";
 
 function OrganizerStats({ user }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Нормализация статусов (потому что может быть "approved" / "APPROVED")
-  const norm = (s) => (s ? String(s).toUpperCase() : "");
+  const navigate = useNavigate();
+  const { error } = useFeedback();
 
-  const getStatusText = (status) => {
-    const statusMap = {
-      PENDING: "⏳ На рассмотрении",
-      APPROVED: "✅ Одобрена",
-      REJECTED: "❌ Отклонена",
-      DRAFT: "📝 Черновик",
-      ACTIVE: "🟢 Активный",
-      COMPLETED: "✅ Завершен",
-      CANCELLED: "🔴 Отменен",
-    };
-    return statusMap[status] || status;
-  };
-
-  useEffect(() => {
-    if (!user || user.role !== "organizer") {
-      setLoading(false);
-      return;
-    }
-    fetchStats();
-    // eslint-disable-next-line
-  }, [user]);
+  const normalizeStatus = (value) => String(value || "").toUpperCase();
 
   const fetchStats = async () => {
     setLoading(true);
-    try {
-      /**
-       * 1) Забираем проекты (как минимум "все проекты").
-       * Если у тебя есть спец-эндпоинт "мои проекты" — можно заменить на него.
-       */
-      const projectsRes = await api.get("/api/projects");
-      const allProjects = Array.isArray(projectsRes.data) ? projectsRes.data : [];
 
-      // Фильтруем проекты текущего организатора
-      const myProjects = allProjects.filter((p) => {
-        const creatorId = p?.creator?.id ?? p?.creatorId;
-        return Number(creatorId) === Number(user.id);
+    try {
+      const projectsResponse = await api.get("/api/projects");
+      const allProjects = Array.isArray(projectsResponse.data) ? projectsResponse.data : [];
+      const myProjects = allProjects.filter((project) => {
+        const creatorId = project?.creator?.id ?? project?.creatorId ?? project?.createdBy;
+        return Number(creatorId) === Number(user?.id);
       });
 
-      // 2) По каждому проекту получаем заявки (организатор имеет доступ через gateway RBAC)
       const applicationsByProject = await Promise.all(
-        myProjects.map(async (p) => {
+        myProjects.map(async (project) => {
           try {
-            const r = await api.get(`/api/applications/project/${p.id}`);
-            return { project: p, applications: Array.isArray(r.data) ? r.data : [] };
-          } catch (e) {
-            // Если на каком-то проекте ошибка — не валим всю страницу
-            console.error(
-  "Не удалось загрузить заявки по проекту",
-  p?.id,
-  e?.response?.status,
-  e?.response?.data || e.message
-);
-            return { project: p, applications: [] };
+            const response = await api.get(`/api/applications/project/${project.id}`);
+            return {
+              project,
+              applications: Array.isArray(response.data) ? response.data : [],
+            };
+          } catch (requestError) {
+            console.error("Не удалось загрузить заявки по проекту:", project?.id, requestError);
+            return { project, applications: [] };
           }
         })
       );
 
-      // 3) Агрегации
       const projectsByStatus = {};
-      for (const p of myProjects) {
-        const s = norm(p?.status || "ACTIVE");
-        projectsByStatus[s] = (projectsByStatus[s] || 0) + 1;
-      }
+      myProjects.forEach((project) => {
+        const status = normalizeStatus(project.status || "ACTIVE");
+        projectsByStatus[status] = (projectsByStatus[status] || 0) + 1;
+      });
 
       let applicationsTotal = 0;
       const applicationsByStatus = {};
       const volunteerIds = new Set();
-
-      // Для "последних заявок" (в UI у тебя ожидаются поля volunteerName/projectTitle/status/createdAt)
-      const recentAppsFlat = [];
-
-      // Для "популярного проекта"
+      const recentApplications = [];
       let popularProject = null;
 
-      for (const item of applicationsByProject) {
-        const project = item.project;
-        const apps = item.applications;
+      applicationsByProject.forEach(({ project, applications }) => {
+        applicationsTotal += applications.length;
 
-        applicationsTotal += apps.length;
-
-        // популярный проект = больше всего заявок
-        if (!popularProject || apps.length > popularProject.applicationsCount) {
+        if (!popularProject || applications.length > popularProject.applicationsCount) {
           popularProject = {
             title: project?.title || "Проект",
-            applicationsCount: apps.length,
+            applicationsCount: applications.length,
           };
         }
 
-        for (const a of apps) {
-          const st = norm(a?.status || "PENDING");
-          applicationsByStatus[st] = (applicationsByStatus[st] || 0) + 1;
+        applications.forEach((application) => {
+          const status = normalizeStatus(application.status || "PENDING");
+          applicationsByStatus[status] = (applicationsByStatus[status] || 0) + 1;
 
-          // уникальные волонтеры — пытаемся достать volunteerId (как бы он ни назывался)
-          const vId = a?.userId ?? a?.user?.id;
+          const volunteerId = application?.userId ?? application?.user?.id;
+          if (volunteerId != null) {
+            volunteerIds.add(String(volunteerId));
+          }
 
-const vFirst = a?.user?.firstName;
-const vLast = a?.user?.lastName;
-
-const volunteerName =
-  vFirst || vLast
-    ? `${vFirst || ""} ${vLast || ""}`.trim()
-    : vId != null
-      ? `Волонтер #${vId}`
-      : "Волонтер";
-
-          recentAppsFlat.push({
-            id: a?.id ?? `${project?.id}-${Math.random()}`,
-            volunteerName,
+          recentApplications.push({
+            id: application?.id ?? `${project?.id}-${recentApplications.length}`,
             projectTitle: project?.title || "Проект",
-            status: st,
-            createdAt: a?.createdAt || new Date().toISOString(),
+            volunteerName:
+              application?.user?.firstName || application?.user?.lastName
+                ? `${application.user?.firstName || ""} ${application.user?.lastName || ""}`.trim()
+                : volunteerId != null
+                ? `Волонтёр #${volunteerId}`
+                : "Волонтёр",
+            status,
+            createdAt: application?.createdAt,
           });
-        }
-      }
+        });
+      });
 
-      // сортируем последние заявки по createdAt desc и берём топ-5
-      recentAppsFlat.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      const recentApplications = recentAppsFlat.slice(0, 5);
+      recentApplications.sort(
+        (left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0)
+      );
 
-      const computed = {
+      setStats({
         projects: {
           total: myProjects.length,
           byStatus: projectsByStatus,
@@ -139,131 +109,183 @@ const volunteerName =
           uniqueVolunteers: volunteerIds.size,
         },
         popularProject,
-        recentApplications,
-      };
-
-      setStats(computed);
-    } catch (error) {
-      console.error("Ошибка при загрузке статистики:", error);
+        recentApplications: recentApplications.slice(0, 5),
+      });
+    } catch (requestError) {
+      console.error("Ошибка при загрузке статистики организатора:", requestError);
       setStats(null);
+      error("Не удалось загрузить статистику организатора");
     } finally {
       setLoading(false);
     }
   };
 
-  // Guard после хуков
-  if (!user) return <div className="loading">Загрузка пользователя...</div>;
-  if (user.role !== "organizer") return <div className="error">Доступно только организатору</div>;
-  if (loading) return <div className="loading">Загрузка статистики...</div>;
-  if (!stats) return <div className="error">Не удалось загрузить статистику</div>;
+  useEffect(() => {
+    if (!user || user.role !== "organizer") {
+      setLoading(false);
+      return;
+    }
+
+    fetchStats();
+  }, [user?.id]);
+
+  if (!user) {
+    return <div className="loading">Загрузка пользователя...</div>;
+  }
+
+  if (user.role !== "organizer") {
+    return <div className="error">Статистика доступна только организатору.</div>;
+  }
+
+  if (loading) {
+    return <div className="loading">Загрузка статистики...</div>;
+  }
+
+  if (!stats) {
+    return <div className="error">Не удалось загрузить статистику.</div>;
+  }
+
+  if (stats.projects.total === 0) {
+    return (
+      <div className="organizer-stats">
+        <div className="stats-header">
+          <div>
+            <p className="section-kicker">Аналитика</p>
+            <h2>Статистика организатора</h2>
+            <p>Как только появится первый проект, здесь соберутся метрики по заявкам и активности.</p>
+          </div>
+        </div>
+
+        <EmptyState
+          icon="bar_chart"
+          title="Статистика пока пуста"
+          description="Создайте первый проект, чтобы увидеть воронку заявок и динамику по участникам."
+          action={
+            <button className="btn btn-primary" type="button" onClick={() => navigate("/create-project")}>
+              <Icon name="add_circle" />
+              <span>Создать проект</span>
+            </button>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="organizer-stats">
       <div className="stats-header">
-        <h2>Статистика организатора</h2>
-        <button className="btn-refresh" onClick={fetchStats} type="button">
-          🔄 Обновить
+        <div>
+          <p className="section-kicker">Аналитика</p>
+          <h2>Статистика организатора</h2>
+          <p>Сводка по проектам, заявкам и вовлечённости волонтёров.</p>
+        </div>
+
+        <button className="btn btn-secondary" type="button" onClick={fetchStats}>
+          <Icon name="refresh" />
+          <span>Обновить</span>
         </button>
       </div>
 
       <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon">📊</div>
-          <div className="stat-content">
-            <h3>{stats.projects.total}</h3>
-            <p>Всего проектов</p>
+        <StatCard icon="folder_open" value={stats.projects.total} label="Всего проектов" />
+        <StatCard icon="assignment" value={stats.applications.total} label="Всего заявок" />
+        <StatCard
+          icon="groups"
+          value={stats.applications.uniqueVolunteers}
+          label="Уникальных волонтёров"
+        />
+        <StatCard
+          icon="local_fire_department"
+          value={stats.popularProject?.applicationsCount ?? 0}
+          label={stats.popularProject ? `Лидер: ${stats.popularProject.title}` : "Популярный проект"}
+        />
+      </div>
+
+      <div className="stats-sections">
+        <section className="stats-section-card">
+          <div className="stats-section-head">
+            <h3>Проекты по статусам</h3>
           </div>
+          <div className="status-stats">
+            {Object.entries(stats.projects.byStatus).map(([status, count]) => {
+              const meta = getProjectStatusMeta(status);
+
+              return (
+                <div key={status} className="status-item">
+                  <StatusPill label={meta.label} tone={meta.tone} />
+                  <strong>{count}</strong>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="stats-section-card">
+          <div className="stats-section-head">
+            <h3>Заявки по статусам</h3>
+          </div>
+          <div className="status-stats">
+            {Object.entries(stats.applications.byStatus).map(([status, count]) => {
+              const meta = getApplicationStatusMeta(status);
+
+              return (
+                <div key={status} className="status-item">
+                  <StatusPill label={meta.label} tone={meta.tone} />
+                  <strong>{count}</strong>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+
+      <section className="stats-section-card">
+        <div className="stats-section-head">
+          <h3>Последние заявки</h3>
         </div>
 
-        <div className="stat-card">
-          <div className="stat-icon">📨</div>
-          <div className="stat-content">
-            <h3>{stats.applications.total}</h3>
-            <p>Всего заявок</p>
-          </div>
-        </div>
+        {stats.recentApplications.length === 0 ? (
+          <EmptyState
+            icon="inbox"
+            title="Пока нет новых заявок"
+            description="Как только волонтёры начнут откликаться, здесь появятся последние обращения."
+          />
+        ) : (
+          <div className="applications-list">
+            {stats.recentApplications.map((application) => {
+              const meta = getApplicationStatusMeta(application.status);
 
-        <div className="stat-card">
-          <div className="stat-icon">👥</div>
-          <div className="stat-content">
-            <h3>{stats.applications.uniqueVolunteers}</h3>
-            <p>Уникальных волонтеров</p>
-          </div>
-        </div>
-
-        {stats.popularProject && (
-          <div className="stat-card">
-            <div className="stat-icon">🔥</div>
-            <div className="stat-content">
-              <h3>{stats.popularProject.applicationsCount}</h3>
-              <p>Заявок на “{stats.popularProject.title}”</p>
-            </div>
+              return (
+                <article key={application.id} className="application-item">
+                  <div className="application-main">
+                    <strong>{application.volunteerName}</strong>
+                    <span>{application.projectTitle}</span>
+                  </div>
+                  <div className="application-meta">
+                    <StatusPill label={meta.label} tone={meta.tone} />
+                    <span>{formatDate(application.createdAt)}</span>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
-      </div>
-
-      <div className="detailed-stats">
-        <div className="stats-section">
-          <h3>Проекты по статусам</h3>
-          <div className="status-stats">
-            {Object.entries(stats.projects.byStatus).map(([status, count]) => (
-              <div key={status} className="status-item">
-                <span className="status-label">{getStatusText(status)}</span>
-                <span className="status-count">{count}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="stats-section">
-          <h3>Заявки по статусам</h3>
-          <div className="status-stats">
-            {Object.entries(stats.applications.byStatus).map(([status, count]) => (
-              <div key={status} className="status-item">
-                <span className="status-label">{getStatusText(status)}</span>
-                <span className="status-count">{count}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {stats.recentApplications.length > 0 && (
-        <div className="recent-applications">
-          <h3>Последние заявки</h3>
-          <div className="applications-list">
-            {stats.recentApplications.map((app) => (
-              <div key={app.id} className="application-item">
-                <div className="app-info">
-                  <strong>{app.volunteerName}</strong>
-                  <span> подал(а) заявку на “{app.projectTitle}”</span>
-                </div>
-                <div className="app-meta">
-                  <span className={`status status-${app.status.toLowerCase()}`}>
-                    {getStatusText(app.status)}
-                  </span>
-                  <span>{new Date(app.createdAt).toLocaleDateString("ru-RU")}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {stats.projects.total === 0 && (
-        <div className="empty-stats">
-          <p>У вас пока нет проектов</p>
-          <p>Создайте первый проект, чтобы увидеть статистику</p>
-          <button
-            className="btn btn-primary"
-            onClick={() => (window.location.href = "/create-project")}
-            type="button"
-          >
-            Создать проект
-          </button>
-        </div>
-      )}
+      </section>
     </div>
+  );
+}
+
+function StatCard({ icon, value, label }) {
+  return (
+    <article className="stat-card">
+      <div className="stat-icon">
+        <Icon name={icon} />
+      </div>
+      <div className="stat-content">
+        <strong>{value}</strong>
+        <span>{label}</span>
+      </div>
+    </article>
   );
 }
 

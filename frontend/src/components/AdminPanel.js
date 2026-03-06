@@ -1,9 +1,23 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import api from "../api/client";
+import { formatDate, formatDateTime, formatPersonName } from "../utils/formatters";
+import {
+  getProjectStatusMeta,
+  getProjectTypeLabel,
+  getRoleLabel,
+} from "../utils/presentation";
+import EmptyState from "./ui/EmptyState";
+import Icon from "./ui/Icon";
+import StatusPill from "./ui/StatusPill";
+import { useFeedback } from "./ui/FeedbackProvider";
 import "./AdminPanel.css";
 
-function AdminPanel({ user }) {
-  const [tab, setTab] = useState("projects"); // projects | users | reviews | reports
+const ROLE_OPTIONS = ["volunteer", "organizer", "admin"];
+
+function AdminPanel({ user, embedded = false, onOpenFullAdmin }) {
+  const [tab, setTab] = useState("projects");
 
   const [pendingProjects, setPendingProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
@@ -21,117 +35,57 @@ function AdminPanel({ user }) {
   const [projectStatuses, setProjectStatuses] = useState([]);
   const [loadingReports, setLoadingReports] = useState(true);
 
-  useEffect(() => {
-    if (!user || user.role !== "admin") return;
-    fetchPendingProjects();
-    fetchUsers();
-    fetchReviews();
-    fetchReports();
-    // eslint-disable-next-line
-  }, [user]);
+  const navigate = useNavigate();
+  const { confirm, error, prompt, success } = useFeedback();
+
+  const openFullAdmin = () => {
+    if (typeof onOpenFullAdmin === "function") {
+      onOpenFullAdmin();
+      return;
+    }
+
+    navigate("/admin");
+  };
 
   const fetchPendingProjects = async () => {
     setLoadingProjects(true);
     try {
-      const res = await api.get("/api/admin/projects/pending");
-      setPendingProjects(Array.isArray(res.data) ? res.data : []);
-    } catch (e) {
-      console.error("Ошибка загрузки проектов на модерации:", e);
+      const response = await api.get("/api/admin/projects/pending");
+      setPendingProjects(Array.isArray(response.data) ? response.data : []);
+    } catch (requestError) {
+      console.error("Ошибка загрузки проектов на модерации:", requestError);
       setPendingProjects([]);
+      error("Не удалось загрузить проекты на модерации");
     } finally {
       setLoadingProjects(false);
-    }
-  };
-
-  const approveProject = async (projectId) => {
-    try {
-      await api.patch(`/api/admin/projects/${projectId}/approve`);
-      setPendingProjects((prev) => prev.filter((p) => p.id !== projectId));
-      fetchReports();
-    } catch (e) {
-      console.error("Ошибка approve:", e);
-      alert("Не удалось одобрить проект");
-    }
-  };
-
-  const rejectProject = async (projectId) => {
-    const reason = window.prompt("Причина отклонения (необязательно):", "");
-    try {
-      await api.patch(`/api/admin/projects/${projectId}/reject`, { reason: reason || null });
-      setPendingProjects((prev) => prev.filter((p) => p.id !== projectId));
-      fetchReports();
-    } catch (e) {
-      console.error("Ошибка reject:", e);
-      alert("Не удалось отклонить проект");
     }
   };
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
     try {
-      const res = await api.get("/api/admin/users");
-      setUsers(Array.isArray(res.data) ? res.data : []);
-    } catch (e) {
-      console.error("Ошибка загрузки пользователей:", e);
+      const response = await api.get("/api/admin/users");
+      setUsers(Array.isArray(response.data) ? response.data : []);
+    } catch (requestError) {
+      console.error("Ошибка загрузки пользователей:", requestError);
       setUsers([]);
+      error("Не удалось загрузить список пользователей");
     } finally {
       setLoadingUsers(false);
-    }
-  };
-
-  const blockUser = async (id) => {
-    try {
-      await api.patch(`/api/admin/users/${id}/block`);
-      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, isBlocked: true } : u)));
-    } catch (e) {
-      console.error("Ошибка блокировки:", e);
-      alert("Не удалось заблокировать пользователя");
-    }
-  };
-
-  const unblockUser = async (id) => {
-    try {
-      await api.patch(`/api/admin/users/${id}/unblock`);
-      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, isBlocked: false } : u)));
-    } catch (e) {
-      console.error("Ошибка разблокировки:", e);
-      alert("Не удалось разблокировать пользователя");
-    }
-  };
-
-  const changeRole = async (id, role) => {
-    try {
-      await api.patch(`/api/admin/users/${id}/role`, { role });
-      setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role } : u)));
-    } catch (e) {
-      console.error("Ошибка смены роли:", e);
-      alert("Не удалось сменить роль");
     }
   };
 
   const fetchReviews = async () => {
     setLoadingReviews(true);
     try {
-      const res = await api.get("/api/admin/reviews");
-      setReviews(Array.isArray(res.data) ? res.data : []);
-    } catch (e) {
-      console.error("Ошибка загрузки отзывов:", e);
+      const response = await api.get("/api/admin/reviews");
+      setReviews(Array.isArray(response.data) ? response.data : []);
+    } catch (requestError) {
+      console.error("Ошибка загрузки отзывов:", requestError);
       setReviews([]);
+      error("Не удалось загрузить отзывы");
     } finally {
       setLoadingReviews(false);
-    }
-  };
-
-  const deleteReview = async (reviewId) => {
-    const ok = window.confirm("Удалить отзыв? Действие необратимо.");
-    if (!ok) return;
-    try {
-      await api.delete(`/api/admin/reviews/${reviewId}`);
-      setReviews((prev) => prev.filter((r) => r.id !== reviewId));
-      fetchReports();
-    } catch (e) {
-      console.error("Ошибка удаления отзыва:", e);
-      alert("Не удалось удалить отзыв");
     }
   };
 
@@ -149,132 +103,146 @@ function AdminPanel({ user }) {
       setUserGrowth(Array.isArray(growthRes.data?.items) ? growthRes.data.items : []);
       setProjectCategories(Array.isArray(categoriesRes.data?.items) ? categoriesRes.data.items : []);
       setProjectStatuses(Array.isArray(statusesRes.data?.items) ? statusesRes.data.items : []);
-    } catch (e) {
-      console.error("Ошибка загрузки отчетов:", e);
+    } catch (requestError) {
+      console.error("Ошибка загрузки отчётов:", requestError);
       setReportsSummary(null);
       setUserGrowth([]);
       setProjectCategories([]);
       setProjectStatuses([]);
+      error("Не удалось загрузить административные отчёты");
     } finally {
       setLoadingReports(false);
     }
   };
 
-  // -------- CSV export --------
-  const escapeCsvCell = (value) => {
-    const str = String(value ?? "");
-    if (/[",;\n]/.test(str)) {
-      return `"${str.replace(/"/g, '""')}"`;
+  const refreshAll = async () => {
+    await Promise.all([
+      fetchPendingProjects(),
+      fetchUsers(),
+      fetchReviews(),
+      fetchReports(),
+    ]);
+  };
+
+  useEffect(() => {
+    if (!user || user.role !== "admin") return;
+    refreshAll();
+  }, [user?.id]);
+
+  const approveProject = async (projectId) => {
+    try {
+      await api.patch(`/api/admin/projects/${projectId}/approve`);
+      success("Проект одобрен.");
+      await Promise.all([fetchPendingProjects(), fetchReports()]);
+    } catch (requestError) {
+      console.error("Ошибка одобрения проекта:", requestError);
+      error("Не удалось одобрить проект");
     }
-    return str;
   };
 
-  const downloadCsv = (rows, filename) => {
-    const csv = rows.map((row) => row.map(escapeCsvCell).join(";")).join("\n");
-    const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" }); // BOM for Excel (RU)
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+  const rejectProject = async (projectId) => {
+    const reason = await prompt({
+      title: "Отклонение проекта",
+      message: "При необходимости добавьте короткую причину отклонения.",
+      confirmLabel: "Отклонить",
+      cancelLabel: "Отмена",
+      placeholder: "Причина отклонения",
+      tone: "danger",
+    });
+
+    if (reason === null) return;
+
+    try {
+      await api.patch(`/api/admin/projects/${projectId}/reject`, {
+        reason: reason || null,
+      });
+      success("Проект отклонён.");
+      await Promise.all([fetchPendingProjects(), fetchReports()]);
+    } catch (requestError) {
+      console.error("Ошибка отклонения проекта:", requestError);
+      error("Не удалось отклонить проект");
+    }
   };
 
-  const exportUsersGrowthCsv = () => {
-    const rows = [
-      ["Отчет", "Рост пользователей по месяцам"],
-      ["Дата экспорта", new Date().toLocaleString("ru-RU")],
-      [],
-      ["Месяц", "Новых пользователей", "Накопительно"],
-      ...userGrowth.map((x) => [x.label || x.month, x.newUsers ?? 0, x.cumulative ?? ""]),
-    ];
-    downloadCsv(rows, "otchet_rost_polzovatelei.csv");
+  const blockUser = async (id) => {
+    try {
+      await api.patch(`/api/admin/users/${id}/block`);
+      setUsers((prev) => prev.map((item) => (item.id === id ? { ...item, isBlocked: true } : item)));
+      success("Пользователь заблокирован.");
+    } catch (requestError) {
+      console.error("Ошибка блокировки пользователя:", requestError);
+      error("Не удалось заблокировать пользователя");
+    }
   };
 
-  const exportCategoriesCsv = () => {
-    const rows = [
-      ["Отчет", "Популярные категории мероприятий"],
-      ["Дата экспорта", new Date().toLocaleString("ru-RU")],
-      [],
-      ["Категория", "Количество проектов"],
-      ...projectCategories.map((x) => [mapProjectType(x.category), x.count ?? 0]),
-    ];
-    downloadCsv(rows, "otchet_kategorii_proektov.csv");
+  const unblockUser = async (id) => {
+    try {
+      await api.patch(`/api/admin/users/${id}/unblock`);
+      setUsers((prev) => prev.map((item) => (item.id === id ? { ...item, isBlocked: false } : item)));
+      success("Пользователь разблокирован.");
+    } catch (requestError) {
+      console.error("Ошибка разблокировки пользователя:", requestError);
+      error("Не удалось разблокировать пользователя");
+    }
   };
 
-  const exportStatusesCsv = () => {
-    const rows = [
-      ["Отчет", "Статусы проектов"],
-      ["Дата экспорта", new Date().toLocaleString("ru-RU")],
-      [],
-      ["Статус", "Количество"],
-      ...projectStatuses.map((x) => [mapProjectStatus(x.status), x.count ?? 0]),
-    ];
-    downloadCsv(rows, "otchet_statusy_proektov.csv");
+  const changeRole = async (id, role) => {
+    try {
+      await api.patch(`/api/admin/users/${id}/role`, { role });
+      setUsers((prev) => prev.map((item) => (item.id === id ? { ...item, role } : item)));
+      success("Роль пользователя обновлена.");
+    } catch (requestError) {
+      console.error("Ошибка смены роли:", requestError);
+      error("Не удалось изменить роль пользователя");
+    }
   };
 
-  const exportSummaryCsv = () => {
-    const s = reportsSummary || {};
-    const rows = [
-      ["Отчет", "Сводные показатели"],
-      ["Дата экспорта", new Date().toLocaleString("ru-RU")],
-      [],
-      ["Показатель", "Значение"],
-      ["Пользователи", s.usersTotal ?? 0],
-      ["Проекты", s.projectsTotal ?? 0],
-      ["Активные проекты", s.activeProjects ?? 0],
-      ["Заявки", s.applicationsTotal ?? 0],
-      ["Отзывы", s.reviewsTotal ?? 0],
-      ["Черновики", s.draftProjects ?? 0],
-      ["Завершенные проекты", s.completedProjects ?? 0],
-      ["Отмененные проекты", s.cancelledProjects ?? 0],
-    ];
-    downloadCsv(rows, "otchet_svodnye_pokazateli.csv");
-  };
+  const deleteReview = async (reviewId) => {
+    const approved = await confirm({
+      title: "Удалить отзыв?",
+      message: "Отзыв будет удалён без возможности восстановления.",
+      confirmLabel: "Удалить",
+      cancelLabel: "Оставить",
+      tone: "danger",
+    });
 
-  const exportAllReportsCsv = () => {
-    const rows = [
-      ["ОТЧЕТЫ АДМИНИСТРАТОРА", ""],
-      ["Дата экспорта", new Date().toLocaleString("ru-RU")],
-      [],
-      ["Сводные показатели", ""],
-      ["Показатель", "Значение"],
-      ["Пользователи", reportsSummary?.usersTotal ?? 0],
-      ["Проекты", reportsSummary?.projectsTotal ?? 0],
-      ["Активные проекты", reportsSummary?.activeProjects ?? 0],
-      ["Заявки", reportsSummary?.applicationsTotal ?? 0],
-      ["Отзывы", reportsSummary?.reviewsTotal ?? 0],
-      ["Черновики", reportsSummary?.draftProjects ?? 0],
-      ["Завершенные проекты", reportsSummary?.completedProjects ?? 0],
-      ["Отмененные проекты", reportsSummary?.cancelledProjects ?? 0],
-      [],
-      ["Рост пользователей по месяцам", ""],
-      ["Месяц", "Новых пользователей", "Накопительно"],
-      ...userGrowth.map((x) => [x.label || x.month, x.newUsers ?? 0, x.cumulative ?? ""]),
-      [],
-      ["Категории проектов", ""],
-      ["Категория", "Количество"],
-      ...projectCategories.map((x) => [mapProjectType(x.category), x.count ?? 0]),
-      [],
-      ["Статусы проектов", ""],
-      ["Статус", "Количество"],
-      ...projectStatuses.map((x) => [mapProjectStatus(x.status), x.count ?? 0]),
-    ];
-    downloadCsv(rows, "otchety_admina_vse.csv");
+    if (!approved) return;
+
+    try {
+      await api.delete(`/api/admin/reviews/${reviewId}`);
+      setReviews((prev) => prev.filter((item) => item.id !== reviewId));
+      success("Отзыв удалён.");
+      await fetchReports();
+    } catch (requestError) {
+      console.error("Ошибка удаления отзыва:", requestError);
+      error("Не удалось удалить отзыв");
+    }
   };
 
   const filteredUsers = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u) => {
-      const hay = `${u.id} ${u.email || ""} ${u.firstName || ""} ${u.lastName || ""} ${u.role || ""}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [users, query]);
+    const searchValue = query.trim().toLowerCase();
+    if (!searchValue) return users;
 
-  if (!user) return <div className="admin-loading">Загрузка...</div>;
+    return users.filter((item) => {
+      const haystack = [
+        item.id,
+        item.email,
+        item.firstName,
+        item.lastName,
+        item.role,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(searchValue);
+    });
+  }, [query, users]);
+
+  if (!user) {
+    return <div className="admin-loading">Загрузка...</div>;
+  }
+
   if (user.role !== "admin") {
     return (
       <div className="admin-error">
@@ -285,140 +253,299 @@ function AdminPanel({ user }) {
   }
 
   return (
-    <div className="admin-panel">
+    <div className={`admin-panel ${embedded ? "admin-panel-embedded" : ""}`}>
       <div className="admin-header">
-        <h1>Админ-панель</h1>
-        <div className="admin-tabs">
-          <button type="button" className={`tab-btn ${tab === "projects" ? "active" : ""}`} onClick={() => setTab("projects")}>
-            🧾 Модерация проектов
+        <div>
+          <p className="section-kicker">Администрирование</p>
+          <h1>{embedded ? "Операционный контур" : "Админ-панель"}</h1>
+          <p>
+            Модерация проектов, управление пользователями, контроль отзывов и
+            сводные отчёты в одном интерфейсе.
+          </p>
+        </div>
+
+        <div className="admin-header-actions">
+          <button type="button" className="btn btn-secondary" onClick={refreshAll}>
+            <Icon name="refresh" />
+            <span>Обновить всё</span>
           </button>
-          <button type="button" className={`tab-btn ${tab === "reviews" ? "active" : ""}`} onClick={() => setTab("reviews")}>
-            📝 Модерация отзывов
-          </button>
-          <button type="button" className={`tab-btn ${tab === "users" ? "active" : ""}`} onClick={() => setTab("users")}>
-            👤 Пользователи
-          </button>
-          <button type="button" className={`tab-btn ${tab === "reports" ? "active" : ""}`} onClick={() => setTab("reports")}>
-            📊 Отчёты
-          </button>
+
+          {embedded ? (
+            <button type="button" className="btn btn-primary" onClick={openFullAdmin}>
+              <Icon name="open_in_new" />
+              <span>Полная панель</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {tab === "projects" && (
+      <div className="admin-tabs">
+        <button
+          type="button"
+          className={`tab-btn ${tab === "projects" ? "active" : ""}`}
+          onClick={() => setTab("projects")}
+        >
+          <Icon name="fact_check" />
+          <span>Проекты</span>
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${tab === "reviews" ? "active" : ""}`}
+          onClick={() => setTab("reviews")}
+        >
+          <Icon name="reviews" />
+          <span>Отзывы</span>
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${tab === "users" ? "active" : ""}`}
+          onClick={() => setTab("users")}
+        >
+          <Icon name="groups" />
+          <span>Пользователи</span>
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${tab === "reports" ? "active" : ""}`}
+          onClick={() => setTab("reports")}
+        >
+          <Icon name="insights" />
+          <span>Отчёты</span>
+        </button>
+      </div>
+
+      {tab === "projects" ? (
         <section className="admin-section">
           <div className="section-header">
-            <h2>Проекты на модерации</h2>
-            <button type="button" className="admin-btn" onClick={fetchPendingProjects}>🔄 Обновить</button>
+            <div>
+              <h2>Проекты на модерации</h2>
+              <p>Ручная проверка новых и обновлённых инициатив перед публикацией.</p>
+            </div>
+            <button type="button" className="btn btn-secondary" onClick={fetchPendingProjects}>
+              <Icon name="refresh" />
+              <span>Обновить</span>
+            </button>
           </div>
+
           {loadingProjects ? (
             <div className="admin-loading">Загрузка проектов...</div>
           ) : pendingProjects.length === 0 ? (
-            <div className="admin-empty">Нет проектов, ожидающих модерации.</div>
+            <EmptyState
+              icon="task_alt"
+              title="Очередь модерации пуста"
+              description="Новых проектов, ожидающих решения, сейчас нет."
+            />
           ) : (
-            <div className="cards">
-              {pendingProjects.map((p) => (
-                <div key={p.id} className="card">
-                  <div className="card-title">
-                    <strong>{p.title}</strong>
-                    <span className="muted">ID: {p.id}</span>
-                  </div>
-                  {p.description && <p className="card-desc">{p.description}</p>}
-                  <div className="card-meta">
-                    <span className="muted">
-                      Организатор: {p.creator ? (`${p.creator.firstName || ""} ${p.creator.lastName || ""}`.trim() || `ID ${p.creator.id}`) : "—"}
-                    </span>
-                    <span className="muted">
-                      Дата: {p.startDate ? new Date(p.startDate).toLocaleDateString("ru-RU") : "—"}
-                    </span>
-                  </div>
-                  <div className="card-actions">
-                    <button type="button" className="admin-btn success" onClick={() => approveProject(p.id)}>✅ Одобрить</button>
-                    <button type="button" className="admin-btn danger" onClick={() => rejectProject(p.id)}>❌ Отклонить</button>
-                  </div>
-                </div>
-              ))}
+            <div className="admin-card-grid">
+              {pendingProjects.map((project) => {
+                const statusMeta = getProjectStatusMeta(project.status || "DRAFT");
+
+                return (
+                  <article key={project.id} className="admin-card">
+                    <div className="admin-card-head">
+                      <div>
+                        <h3>{project.title}</h3>
+                        <p>{project.description || "Описание отсутствует."}</p>
+                      </div>
+                      <StatusPill label={statusMeta.label} tone={statusMeta.tone} />
+                    </div>
+
+                    <div className="admin-card-meta">
+                      <span>
+                        <strong>Организатор:</strong>{" "}
+                        {formatPersonName(project.creator, "Организатор")}
+                      </span>
+                      <span>
+                        <strong>Тип:</strong> {getProjectTypeLabel(project.projectType)}
+                      </span>
+                      <span>
+                        <strong>Дата старта:</strong> {formatDate(project.startDate)}
+                      </span>
+                      <span>
+                        <strong>Локация:</strong> {project.location || "Не указана"}
+                      </span>
+                    </div>
+
+                    <div className="admin-card-actions">
+                      <button
+                        type="button"
+                        className="btn btn-success"
+                        onClick={() => approveProject(project.id)}
+                      >
+                        <Icon name="check_circle" />
+                        <span>Одобрить</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        onClick={() => rejectProject(project.id)}
+                      >
+                        <Icon name="cancel" />
+                        <span>Отклонить</span>
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
-      )}
+      ) : null}
 
-      {tab === "reviews" && (
+      {tab === "reviews" ? (
         <section className="admin-section">
           <div className="section-header">
-            <h2>Отзывы</h2>
-            <button type="button" className="admin-btn" onClick={fetchReviews}>🔄 Обновить</button>
+            <div>
+              <h2>Отзывы</h2>
+              <p>Контент-модерация и ручное удаление конфликтных или некорректных записей.</p>
+            </div>
+            <button type="button" className="btn btn-secondary" onClick={fetchReviews}>
+              <Icon name="refresh" />
+              <span>Обновить</span>
+            </button>
           </div>
+
           {loadingReviews ? (
             <div className="admin-loading">Загрузка отзывов...</div>
           ) : reviews.length === 0 ? (
-            <div className="admin-empty">Отзывов нет.</div>
+            <EmptyState
+              icon="rate_review"
+              title="Отзывов пока нет"
+              description="После появления пользовательских отзывов они будут доступны здесь."
+            />
           ) : (
-            <div className="cards">
-              {reviews.map((r) => (
-                <div key={r.id} className="card">
-                  <div className="card-title">
-                    <strong>{r.project?.title || "Проект"}</strong>
-                    <span className="muted">ID: {r.id}</span>
+            <div className="admin-card-grid">
+              {reviews.map((review) => (
+                <article key={review.id} className="admin-card">
+                  <div className="admin-card-head">
+                    <div>
+                      <h3>{review.project?.title || "Проект"}</h3>
+                      <p>{review.text || "Автор не добавил текст к отзыву."}</p>
+                    </div>
+                    <span className="admin-rating">{review.rating}/5</span>
                   </div>
-                  <div className="card-meta">
-                    <span className="muted">Автор: {r.authorName || r.authorEmail || r.authorId || "—"}</span>
-                    <span className="muted">Дата: {r.createdAt ? new Date(r.createdAt).toLocaleDateString("ru-RU") : "—"}</span>
+
+                  <div className="admin-card-meta">
+                    <span>
+                      <strong>Автор:</strong>{" "}
+                      {review.authorName || review.authorEmail || `Пользователь #${review.authorId}`}
+                    </span>
+                    <span>
+                      <strong>Создан:</strong> {formatDateTime(review.createdAt)}
+                    </span>
+                    <span>
+                      <strong>Проект ID:</strong> {review.projectId}
+                    </span>
                   </div>
-                  <div className="card-meta">
-                    <span className="muted">Рейтинг: ⭐ {r.rating}</span>
-                    <span className="muted">Проект ID: {r.projectId}</span>
+
+                  <div className="admin-card-actions">
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      onClick={() => deleteReview(review.id)}
+                    >
+                      <Icon name="delete" />
+                      <span>Удалить отзыв</span>
+                    </button>
                   </div>
-                  {r.text && <p className="card-desc">{r.text}</p>}
-                  <div className="card-actions">
-                    <button type="button" className="admin-btn danger" onClick={() => deleteReview(r.id)}>🗑️ Удалить</button>
-                  </div>
-                </div>
+                </article>
               ))}
             </div>
           )}
         </section>
-      )}
+      ) : null}
 
-      {tab === "users" && (
+      {tab === "users" ? (
         <section className="admin-section">
           <div className="section-header">
-            <h2>Пользователи</h2>
-            <button type="button" className="admin-btn" onClick={fetchUsers}>🔄 Обновить</button>
+            <div>
+              <h2>Пользователи</h2>
+              <p>Поиск, управление ролями и блокировками без выхода из панели.</p>
+            </div>
+            <button type="button" className="btn btn-secondary" onClick={fetchUsers}>
+              <Icon name="refresh" />
+              <span>Обновить</span>
+            </button>
           </div>
+
           <div className="admin-toolbar">
-            <input className="search" placeholder="Поиск по id / email / имени / роли..." value={query} onChange={(e) => setQuery(e.target.value)} />
+            <label className="admin-search">
+              <Icon name="search" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Поиск по ID, email, имени или роли"
+              />
+            </label>
           </div>
+
           {loadingUsers ? (
             <div className="admin-loading">Загрузка пользователей...</div>
           ) : filteredUsers.length === 0 ? (
-            <div className="admin-empty">Пользователи не найдены.</div>
+            <EmptyState
+              icon="person_search"
+              title="Пользователи не найдены"
+              description="Измените поисковый запрос или обновите список."
+            />
           ) : (
             <div className="table-wrap">
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>ID</th><th>Email</th><th>Имя</th><th>Роль</th><th>Статус</th><th>Действия</th>
+                    <th>ID</th>
+                    <th>Пользователь</th>
+                    <th>Роль</th>
+                    <th>Статус</th>
+                    <th>Действия</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredUsers.map((u) => (
-                    <tr key={u.id}>
-                      <td>{u.id}</td>
-                      <td>{u.email || "—"}</td>
-                      <td>{`${u.firstName || ""} ${u.lastName || ""}`.trim() || "—"}</td>
+                  {filteredUsers.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.id}</td>
                       <td>
-                        <select value={u.role} onChange={(e) => changeRole(u.id, e.target.value)}>
-                          <option value="volunteer">volunteer</option>
-                          <option value="organizer">organizer</option>
-                          <option value="admin">admin</option>
+                        <div className="admin-user-cell">
+                          <strong>{formatPersonName(item, "Пользователь")}</strong>
+                          <span>{item.email || "Email не указан"}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <select
+                          value={item.role}
+                          onChange={(event) => changeRole(item.id, event.target.value)}
+                        >
+                          {ROLE_OPTIONS.map((role) => (
+                            <option key={role} value={role}>
+                              {getRoleLabel(role)}
+                            </option>
+                          ))}
                         </select>
                       </td>
-                      <td>{u.isBlocked ? <span className="badge danger">blocked</span> : <span className="badge success">active</span>}</td>
                       <td>
-                        {u.isBlocked ? (
-                          <button type="button" className="admin-btn" onClick={() => unblockUser(u.id)}>Разблокировать</button>
+                        <StatusPill
+                          label={item.isBlocked ? "Заблокирован" : "Активен"}
+                          tone={item.isBlocked ? "cancelled" : "active"}
+                        />
+                      </td>
+                      <td>
+                        {item.isBlocked ? (
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={() => unblockUser(item.id)}
+                          >
+                            <Icon name="lock_open" />
+                            <span>Разблокировать</span>
+                          </button>
                         ) : (
-                          <button type="button" className="admin-btn danger" onClick={() => blockUser(u.id)}>Заблокировать</button>
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            onClick={() => blockUser(item.id)}
+                          >
+                            <Icon name="block" />
+                            <span>Заблокировать</span>
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -428,25 +555,37 @@ function AdminPanel({ user }) {
             </div>
           )}
         </section>
-      )}
+      ) : null}
 
-      {tab === "reports" && (
+      {tab === "reports" ? (
         <section className="admin-section">
           <div className="section-header">
-            <h2>Отчёты и аналитика</h2>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button type="button" className="admin-btn" onClick={fetchReports}>🔄 Обновить</button>
-              <button type="button" className="admin-btn" onClick={exportAllReportsCsv} disabled={loadingReports}>
-                ⬇️ Экспорт всех отчетов (CSV)
+            <div>
+              <h2>Отчёты и аналитика</h2>
+              <p>Сводные показатели по платформе и быстрый экспорт CSV без отдельного BI-контура.</p>
+            </div>
+            <div className="admin-header-actions">
+              <button type="button" className="btn btn-secondary" onClick={fetchReports}>
+                <Icon name="refresh" />
+                <span>Обновить</span>
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => exportAllReportsCsv({ reportsSummary, userGrowth, projectCategories, projectStatuses })}
+                disabled={loadingReports}
+              >
+                <Icon name="download" />
+                <span>Экспорт CSV</span>
               </button>
             </div>
           </div>
 
           {loadingReports ? (
-            <div className="admin-loading">Загрузка отчетов...</div>
+            <div className="admin-loading">Загрузка отчётов...</div>
           ) : (
             <>
-              <div className="cards">
+              <div className="admin-summary-grid">
                 <SummaryCard title="Пользователи" value={reportsSummary?.usersTotal ?? 0} />
                 <SummaryCard title="Проекты" value={reportsSummary?.projectsTotal ?? 0} />
                 <SummaryCard title="Активные проекты" value={reportsSummary?.activeProjects ?? 0} />
@@ -455,98 +594,117 @@ function AdminPanel({ user }) {
                 <SummaryCard title="Черновики" value={reportsSummary?.draftProjects ?? 0} />
               </div>
 
-              <div className="cards" style={{ marginTop: 16 }}>
-                <div className="card" style={{ gridColumn: "span 2" }}>
-                  <div className="card-title" style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                    <strong>Рост пользователей по месяцам</strong>
-                    <button type="button" className="admin-btn" onClick={exportUsersGrowthCsv}>CSV</button>
+              <div className="admin-report-grid">
+                <article className="admin-card admin-card-wide">
+                  <div className="admin-card-head">
+                    <div>
+                      <h3>Рост пользователей</h3>
+                      <p>Новые регистрации по месяцам за последний год.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => exportUsersGrowthCsv(userGrowth)}
+                    >
+                      <Icon name="download" />
+                      <span>CSV</span>
+                    </button>
                   </div>
                   <SimpleBarChart
-                    items={userGrowth.map((x) => ({ label: x.label || x.month, value: x.newUsers }))}
-                    emptyText="Нет данных по пользователям"
+                    items={userGrowth.map((item) => ({
+                      label: item.label || item.month,
+                      value: item.newUsers,
+                    }))}
+                    emptyText="Нет данных по росту пользователей."
                   />
-                </div>
+                </article>
 
-                <div className="card">
-                  <div className="card-title" style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                    <strong>Популярные категории мероприятий</strong>
-                    <button type="button" className="admin-btn" onClick={exportCategoriesCsv}>CSV</button>
+                <article className="admin-card">
+                  <div className="admin-card-head">
+                    <div>
+                      <h3>Категории проектов</h3>
+                      <p>Распределение проектного портфеля по типам.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => exportCategoriesCsv(projectCategories)}
+                    >
+                      <Icon name="download" />
+                      <span>CSV</span>
+                    </button>
                   </div>
                   <SimpleBarChart
-                    items={projectCategories.map((x) => ({ label: mapProjectType(x.category), value: x.count }))}
-                    emptyText="Нет данных по категориям"
+                    items={projectCategories.map((item) => ({
+                      label: getProjectTypeLabel(item.category),
+                      value: item.count,
+                    }))}
+                    emptyText="Нет данных по категориям."
                   />
-                </div>
+                </article>
 
-                <div className="card">
-                  <div className="card-title" style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                    <strong>Статусы проектов</strong>
-                    <button type="button" className="admin-btn" onClick={exportStatusesCsv}>CSV</button>
+                <article className="admin-card">
+                  <div className="admin-card-head">
+                    <div>
+                      <h3>Статусы проектов</h3>
+                      <p>Текущее распределение по жизненному циклу инициатив.</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => exportStatusesCsv(projectStatuses)}
+                    >
+                      <Icon name="download" />
+                      <span>CSV</span>
+                    </button>
                   </div>
                   <SimpleBarChart
-                    items={projectStatuses.map((x) => ({ label: mapProjectStatus(x.status), value: x.count }))}
-                    emptyText="Нет данных по статусам"
+                    items={projectStatuses.map((item) => ({
+                      label: getProjectStatusMeta(item.status).label,
+                      value: item.count,
+                    }))}
+                    emptyText="Нет данных по статусам."
                   />
-                </div>
-
-                <div className="card">
-                  <div className="card-title" style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                    <strong>Сводные показатели</strong>
-                    <button type="button" className="admin-btn" onClick={exportSummaryCsv}>CSV</button>
-                  </div>
-                  <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-                    <div className="muted" style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>Пользователи</span><strong>{reportsSummary?.usersTotal ?? 0}</strong>
-                    </div>
-                    <div className="muted" style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>Проекты</span><strong>{reportsSummary?.projectsTotal ?? 0}</strong>
-                    </div>
-                    <div className="muted" style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>Активные проекты</span><strong>{reportsSummary?.activeProjects ?? 0}</strong>
-                    </div>
-                    <div className="muted" style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>Заявки</span><strong>{reportsSummary?.applicationsTotal ?? 0}</strong>
-                    </div>
-                    <div className="muted" style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span>Отзывы</span><strong>{reportsSummary?.reviewsTotal ?? 0}</strong>
-                    </div>
-                  </div>
-                </div>
+                </article>
               </div>
             </>
           )}
         </section>
-      )}
+      ) : null}
     </div>
   );
 }
 
 function SummaryCard({ title, value }) {
   return (
-    <div className="card">
-      <div className="muted" style={{ marginBottom: 8 }}>{title}</div>
-      <div style={{ fontSize: 28, fontWeight: 700 }}>{value}</div>
-    </div>
+    <article className="admin-summary-card">
+      <span>{title}</span>
+      <strong>{value}</strong>
+    </article>
   );
 }
 
 function SimpleBarChart({ items, emptyText }) {
-  if (!items || items.length === 0) return <div className="admin-empty">{emptyText}</div>;
-  const max = Math.max(...items.map((i) => Number(i.value) || 0), 1);
+  if (!items?.length) {
+    return <EmptyState icon="bar_chart" title="Пока пусто" description={emptyText} />;
+  }
+
+  const max = Math.max(...items.map((item) => Number(item.value) || 0), 1);
 
   return (
-    <div style={{ display: "grid", gap: 10, marginTop: 8 }}>
+    <div className="admin-chart">
       {items.map((item) => {
         const value = Number(item.value) || 0;
         const width = `${Math.max(4, Math.round((value / max) * 100))}%`;
+
         return (
-          <div key={`${item.label}-${value}`} style={{ display: "grid", gap: 4 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-              <span className="muted" style={{ fontSize: 13 }}>{item.label}</span>
-              <strong style={{ fontSize: 13 }}>{value}</strong>
+          <div key={`${item.label}-${value}`} className="admin-chart-row">
+            <div className="admin-chart-head">
+              <span>{item.label}</span>
+              <strong>{value}</strong>
             </div>
-            <div style={{ width: "100%", height: 10, borderRadius: 999, background: "#eef2f7", overflow: "hidden" }}>
-              <div style={{ width, height: "100%", borderRadius: 999, background: "linear-gradient(90deg, #5b8def, #7c5cff)" }} />
+            <div className="admin-chart-track">
+              <div className="admin-chart-bar" style={{ width }} />
             </div>
           </div>
         );
@@ -555,28 +713,97 @@ function SimpleBarChart({ items, emptyText }) {
   );
 }
 
-function mapProjectType(type) {
-  const map = {
-    ECOLOGY: "Экология",
-    ANIMAL_WELFARE: "Помощь животным",
-    EDUCATION: "Образование",
-    SOCIAL: "Социальные",
-    CULTURAL: "Культура",
-    SPORTS: "Спорт",
-    MEDICAL: "Медицина",
-    OTHER: "Другое",
-  };
-  return map[type] || type || "Другое";
+function escapeCsvCell(value) {
+  const stringValue = String(value ?? "");
+
+  if (/[",;\n]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+
+  return stringValue;
 }
 
-function mapProjectStatus(status) {
-  const map = {
-    DRAFT: "Черновик",
-    ACTIVE: "Активный",
-    COMPLETED: "Завершён",
-    CANCELLED: "Отменён",
-  };
-  return map[status] || status || "Неизвестно";
+function downloadCsv(rows, filename) {
+  const csv = rows.map((row) => row.map(escapeCsvCell).join(";")).join("\n");
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function exportUsersGrowthCsv(userGrowth) {
+  downloadCsv(
+    [
+      ["Отчёт", "Рост пользователей по месяцам"],
+      ["Дата экспорта", new Date().toLocaleString("ru-RU")],
+      [],
+      ["Месяц", "Новых пользователей", "Накопительно"],
+      ...userGrowth.map((item) => [item.label || item.month, item.newUsers ?? 0, item.cumulative ?? ""]),
+    ],
+    "admin_user_growth.csv"
+  );
+}
+
+function exportCategoriesCsv(projectCategories) {
+  downloadCsv(
+    [
+      ["Отчёт", "Категории проектов"],
+      ["Дата экспорта", new Date().toLocaleString("ru-RU")],
+      [],
+      ["Категория", "Количество"],
+      ...projectCategories.map((item) => [getProjectTypeLabel(item.category), item.count ?? 0]),
+    ],
+    "admin_project_categories.csv"
+  );
+}
+
+function exportStatusesCsv(projectStatuses) {
+  downloadCsv(
+    [
+      ["Отчёт", "Статусы проектов"],
+      ["Дата экспорта", new Date().toLocaleString("ru-RU")],
+      [],
+      ["Статус", "Количество"],
+      ...projectStatuses.map((item) => [getProjectStatusMeta(item.status).label, item.count ?? 0]),
+    ],
+    "admin_project_statuses.csv"
+  );
+}
+
+function exportAllReportsCsv({ reportsSummary, userGrowth, projectCategories, projectStatuses }) {
+  downloadCsv(
+    [
+      ["Административный отчёт", ""],
+      ["Дата экспорта", new Date().toLocaleString("ru-RU")],
+      [],
+      ["Сводные показатели", ""],
+      ["Показатель", "Значение"],
+      ["Пользователи", reportsSummary?.usersTotal ?? 0],
+      ["Проекты", reportsSummary?.projectsTotal ?? 0],
+      ["Активные проекты", reportsSummary?.activeProjects ?? 0],
+      ["Заявки", reportsSummary?.applicationsTotal ?? 0],
+      ["Отзывы", reportsSummary?.reviewsTotal ?? 0],
+      ["Черновики", reportsSummary?.draftProjects ?? 0],
+      [],
+      ["Рост пользователей", ""],
+      ["Месяц", "Новых пользователей", "Накопительно"],
+      ...userGrowth.map((item) => [item.label || item.month, item.newUsers ?? 0, item.cumulative ?? ""]),
+      [],
+      ["Категории проектов", ""],
+      ["Категория", "Количество"],
+      ...projectCategories.map((item) => [getProjectTypeLabel(item.category), item.count ?? 0]),
+      [],
+      ["Статусы проектов", ""],
+      ["Статус", "Количество"],
+      ...projectStatuses.map((item) => [getProjectStatusMeta(item.status).label, item.count ?? 0]),
+    ],
+    "admin_reports.csv"
+  );
 }
 
 export default AdminPanel;

@@ -1,167 +1,155 @@
 import React, { useEffect, useMemo, useState } from "react";
+
 import api from "../api/client";
+import { formatDate, formatPersonName } from "../utils/formatters";
+import { getProjectStatusMeta } from "../utils/presentation";
+import EmptyState from "./ui/EmptyState";
+import Icon from "./ui/Icon";
+import StatusPill from "./ui/StatusPill";
 import "./ProjectHistory.css";
 
 function ProjectHistory({ user, generateCertificate }) {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("ALL"); // ALL | COMPLETED | CANCELLED
+  const [filter, setFilter] = useState("ALL");
 
   useEffect(() => {
-    if (!user) return;
+    const fetchHistory = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const response = await api.get("/api/applications/my");
+        setApplications(Array.isArray(response.data) ? response.data : []);
+      } catch (requestError) {
+        console.error("Ошибка загрузки истории участия:", requestError);
+        setApplications([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchHistory();
-    // eslint-disable-next-line
-  }, [user]);
+  }, [user?.id]);
 
-  const fetchHistory = async () => {
-    try {
-      // История участия строится по заявкам волонтёра
-      const res = await api.get("/api/applications/my");
-      setApplications(Array.isArray(res.data) ? res.data : []);
-    } catch (e) {
-      console.error("Ошибка при загрузке истории участия:", e);
-      setApplications([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const normalizeStatus = (value) => String(value || "").toUpperCase();
 
-  // статус заявки может быть "APPROVED" или "approved" — нормализуем
-  const normalizeStatus = (s) => (s ? String(s).toUpperCase() : "");
-
-  // проект может считаться завершённым:
-  // 1) по status: COMPLETED/CANCELLED
-  // 2) или по endDate < now (если status нет/не используется)
-  const projectIsFinished = (project) => {
-    if (!project) return false;
-
-    const status = normalizeStatus(project.status);
-    if (status === "COMPLETED" || status === "CANCELLED") return true;
-
-    if (project.endDate) {
-      const end = new Date(project.endDate).getTime();
-      if (!Number.isNaN(end) && end < Date.now()) return true;
-    }
-
-    return false;
-  };
-
-  const getProjectStatus = (project) => {
+  const getProjectLifecycleStatus = (project) => {
     const status = normalizeStatus(project?.status);
+
     if (status === "CANCELLED") return "CANCELLED";
-    // если статус явно completed — ок, иначе если закончился по дате — считаем completed
     if (status === "COMPLETED") return "COMPLETED";
-    if (projectIsFinished(project)) return "COMPLETED";
+
+    if (project?.endDate) {
+      const endDate = new Date(project.endDate);
+      if (!Number.isNaN(endDate.getTime()) && endDate.getTime() < Date.now()) {
+        return "COMPLETED";
+      }
+    }
+
     return "ACTIVE";
   };
 
-  const getStatusText = (status) => {
-    const map = {
-      COMPLETED: "✅ Завершен",
-      CANCELLED: "❌ Отменен",
-    };
-    return map[status] || status;
-  };
-
-  // Берём только те заявки, где участие реально состоялось:
-  // approve + проект завершён (по статусу или по дате)
   const participationHistory = useMemo(() => {
-    const approved = applications.filter((a) => normalizeStatus(a.status) === "APPROVED");
-    const finished = approved.filter((a) => projectIsFinished(a.project));
-    return finished;
+    return applications.filter((application) => {
+      const approved = normalizeStatus(application.status) === "APPROVED";
+      const lifecycleStatus = getProjectLifecycleStatus(application.project);
+      return approved && lifecycleStatus !== "ACTIVE";
+    });
   }, [applications]);
 
   const filteredHistory = useMemo(() => {
     if (filter === "ALL") return participationHistory;
 
-    return participationHistory.filter((a) => {
-      const pStatus = getProjectStatus(a.project);
-      return pStatus === filter;
-    });
-  }, [participationHistory, filter]);
+    return participationHistory.filter(
+      (application) => getProjectLifecycleStatus(application.project) === filter
+    );
+  }, [filter, participationHistory]);
 
   if (!user) return null;
 
-  if (loading) return <div className="loading">Загрузка истории...</div>;
+  if (loading) {
+    return <div className="loading">Загружаем историю участия...</div>;
+  }
 
   return (
     <div className="project-history">
       <div className="history-filters">
         <button
+          type="button"
           className={`filter-btn ${filter === "ALL" ? "active" : ""}`}
           onClick={() => setFilter("ALL")}
-          type="button"
         >
           Все
         </button>
         <button
+          type="button"
           className={`filter-btn ${filter === "COMPLETED" ? "active" : ""}`}
           onClick={() => setFilter("COMPLETED")}
-          type="button"
         >
-          Завершенные
+          Завершённые
         </button>
         <button
+          type="button"
           className={`filter-btn ${filter === "CANCELLED" ? "active" : ""}`}
           onClick={() => setFilter("CANCELLED")}
-          type="button"
         >
-          Отмененные
+          Отменённые
         </button>
       </div>
 
-      <div className="history-list">
-        {filteredHistory.length === 0 ? (
-          <div className="empty-state">
-            <p>У вас пока нет завершенных проектов</p>
-            <p>Подавайте заявки и участвуйте в волонтерской деятельности!</p>
-          </div>
-        ) : (
-          filteredHistory.map((participation) => {
-            const project = participation.project;
-            const pStatus = getProjectStatus(project);
+      {filteredHistory.length === 0 ? (
+        <EmptyState
+          icon="history"
+          title="История участия пока пуста"
+          description="После завершения подтверждённых проектов здесь появятся ваши участия и сертификаты."
+        />
+      ) : (
+        <div className="history-list">
+          {filteredHistory.map((participation) => {
+            const project = participation.project || {};
+            const statusMeta = getProjectStatusMeta(getProjectLifecycleStatus(project));
 
             return (
-              <div key={participation.id} className="history-item">
+              <article key={participation.id} className="history-item">
                 <div className="history-content">
-                  <h3>{project?.title || "Проект"}</h3>
-                  <p>{project?.description || ""}</p>
+                  <div className="history-head">
+                    <h3>{project.title || "Проект"}</h3>
+                    <StatusPill label={statusMeta.label} tone={statusMeta.tone} />
+                  </div>
+
+                  <p>{project.description || "Описание отсутствует."}</p>
 
                   <div className="history-meta">
-                    <span className={`status status-${pStatus.toLowerCase()}`}>
-                      {getStatusText(pStatus)}
-                    </span>
-
                     <span>
-                      Организатор:{" "}
-                      {project?.creator
-                        ? `${project.creator.firstName} ${project.creator.lastName}`
-                        : "—"}
+                      <strong>Организатор:</strong> {formatPersonName(project.creator, "Организатор")}
                     </span>
-
                     <span>
-                      Дата участия:{" "}
-                      {participation.createdAt
-                        ? new Date(participation.createdAt).toLocaleDateString("ru-RU")
-                        : "—"}
+                      <strong>Дата участия:</strong> {formatDate(participation.createdAt)}
+                    </span>
+                    <span>
+                      <strong>Дата проекта:</strong> {formatDate(project.startDate)}
                     </span>
                   </div>
                 </div>
 
-                {typeof generateCertificate === "function" && (
+                {typeof generateCertificate === "function" ? (
                   <button
+                    type="button"
                     className="btn btn-primary"
                     onClick={() => generateCertificate(participation)}
-                    type="button"
                   >
-                    📄 Скачать сертификат
+                    <Icon name="download" />
+                    <span>Скачать сертификат</span>
                   </button>
-                )}
-              </div>
+                ) : null}
+              </article>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 }

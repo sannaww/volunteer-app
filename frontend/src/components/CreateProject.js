@@ -1,110 +1,71 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import api from "../api/client";
-import { useNavigate } from 'react-router-dom';
-import './CreateProject.css';
+import { validateContactInfo } from "../utils/contactInfo";
+import { PROJECT_TYPE_OPTIONS } from "../utils/presentation";
+import { useFeedback } from "./ui/FeedbackProvider";
+import Icon from "./ui/Icon";
+import "./CreateProject.css";
 
-function CreateProject({ user }) {
+function CreateProject() {
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    status: 'DRAFT',
-    startDate: '',
-    endDate: '',
-    location: '',
-    projectType: '',
+    title: "",
+    description: "",
+    status: "DRAFT",
+    startDate: "",
+    endDate: "",
+    location: "",
+    projectType: "",
     volunteersRequired: 1,
-    contactInfo: ''
+    contactInfo: "",
   });
-
   const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
+  const { error, success } = useFeedback();
 
-  const projectTypes = [
-    { value: 'ECOLOGY', label: '🌱 Экология' },
-    { value: 'ANIMAL_WELFARE', label: '🐾 Защита животных' },
-    { value: 'EDUCATION', label: '📚 Образование' },
-    { value: 'SOCIAL', label: '❤️ Социальная помощь' },
-    { value: 'CULTURAL', label: '🎨 Культура' },
-    { value: 'SPORTS', label: '⚽ Спорт' },
-    { value: 'MEDICAL', label: '🏥 Медицина' },
-    { value: 'OTHER', label: '🔧 Другое' }
-  ];
-
-  // Если пользователь не авторизован, перенаправляем на страницу входа
-  if (!user) {
-    navigate('/login');
-    return null;
-  }
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prevState => ({
-      ...prevState,
-      [name]: value
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
     }));
   };
 
-const handleContactInfoChange = (e) => {
-  const { value } = e.target;
-  
-  // Проверяем, если это похоже на email
-  if (value.includes('@')) {
-    // Это email, оставляем как есть
-    setFormData(prevState => ({
-      ...prevState,
-      contactInfo: value
+  const handleContactInfoChange = (event) => {
+    setFormData((prev) => ({
+      ...prev,
+      contactInfo: event.target.value,
     }));
-  } else {
-    // Это телефон, применяем маску
-    let cleanedValue = value.replace(/[^\d+]/g, '');
-    
-    if (cleanedValue.startsWith('8')) {
-      cleanedValue = '+7' + cleanedValue.substring(1);
-    } else if (cleanedValue.startsWith('7') && !cleanedValue.startsWith('+7')) {
-      cleanedValue = '+7' + cleanedValue.substring(1);
-    } else if (!cleanedValue.startsWith('+')) {
-      cleanedValue = '+7' + cleanedValue;
-    }
-    
-    if (cleanedValue.length > 12) {
-      cleanedValue = cleanedValue.substring(0, 12);
-    }
-    
-    setFormData(prevState => ({
-      ...prevState,
-      contactInfo: cleanedValue
-    }));
-  }
-};
+  };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (loading) return;
+
+    const contactValidation = validateContactInfo(formData.contactInfo);
+    if (!contactValidation.ok) {
+      error(contactValidation.message, "Проверьте контакты");
+      return;
+    }
+
     setLoading(true);
-
     try {
-      const token = localStorage.getItem('token');
-      
-      // Подготавливаем данные для отправки
-      const dataToSend = {
+      const payload = {
         ...formData,
-        volunteersRequired: parseInt(formData.volunteersRequired),
-        // Преобразуем пустые строки в null для дат
+        contactInfo: contactValidation.value,
+        volunteersRequired: Number.parseInt(formData.volunteersRequired, 10),
         startDate: formData.startDate || null,
-        endDate: formData.endDate || null
+        endDate: formData.endDate || null,
       };
 
-      console.log('Отправляемые данные:', dataToSend);
-
-const response = await api.post(
-  "/api/projects",
-  dataToSend
-);
-
-      alert('Проект успешно создан!');
-      navigate('/');
-    } catch (error) {
-      console.error('Ошибка при создании проекта:', error);
-      alert(error.response?.data?.error || 'Не удалось создать проект');
+      await api.post("/api/projects", payload);
+      success("Проект создан и сохранен.", "Готово");
+      navigate("/");
+    } catch (requestError) {
+      console.error("Ошибка при создании проекта:", requestError);
+      error(requestError.response?.data?.error || "Не удалось создать проект");
     } finally {
       setLoading(false);
     }
@@ -112,40 +73,37 @@ const response = await api.post(
 
   return (
     <div className="create-project">
-      <h2>Создать новый проект</h2>
-      <form onSubmit={handleSubmit}>
+      <div className="page-header">
+        <div>
+          <h1>Новый проект</h1>
+          <p>Создайте карточку проекта и сохраните ее как черновик или отправьте на публикацию.</p>
+        </div>
+      </div>
+
+      <form className="project-form-surface" onSubmit={handleSubmit}>
         <div className="form-group">
-          <label>Название проекта:*</label>
-          <input
-            type="text"
-            name="title"
-            value={formData.title}
-            onChange={handleChange}
-            required
-          />
+          <label htmlFor="project-title">Название проекта</label>
+          <input id="project-title" type="text" name="title" value={formData.title} onChange={handleChange} required />
         </div>
 
         <div className="form-group">
-          <label>Описание:*</label>
+          <label htmlFor="project-description">Описание</label>
           <textarea
+            id="project-description"
             name="description"
             value={formData.description}
             onChange={handleChange}
             required
-            rows="5"
+            rows="6"
           />
         </div>
 
         <div className="form-row">
           <div className="form-group">
-            <label>Тип проекта:</label>
-            <select
-              name="projectType"
-              value={formData.projectType}
-              onChange={handleChange}
-            >
+            <label htmlFor="project-type">Тип проекта</label>
+            <select id="project-type" name="projectType" value={formData.projectType} onChange={handleChange}>
               <option value="">Выберите тип</option>
-              {projectTypes.map(type => (
+              {PROJECT_TYPE_OPTIONS.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
                 </option>
@@ -154,8 +112,9 @@ const response = await api.post(
           </div>
 
           <div className="form-group">
-            <label>Требуется волонтеров:*</label>
+            <label htmlFor="project-volunteers">Требуется волонтеров</label>
             <input
+              id="project-volunteers"
               type="number"
               name="volunteersRequired"
               value={formData.volunteersRequired}
@@ -168,76 +127,65 @@ const response = await api.post(
 
         <div className="form-row">
           <div className="form-group">
-            <label>Дата начала:</label>
-            <input
-              type="date"
-              name="startDate"
-              value={formData.startDate}
-              onChange={handleChange}
-            />
+            <label htmlFor="project-start-date">Дата начала</label>
+            <input id="project-start-date" type="date" name="startDate" value={formData.startDate} onChange={handleChange} />
           </div>
 
           <div className="form-group">
-            <label>Дата окончания:</label>
-            <input
-              type="date"
-              name="endDate"
-              value={formData.endDate}
-              onChange={handleChange}
-            />
+            <label htmlFor="project-end-date">Дата окончания</label>
+            <input id="project-end-date" type="date" name="endDate" value={formData.endDate} onChange={handleChange} />
           </div>
         </div>
 
         <div className="form-group">
-          <label>Местоположение:</label>
+          <label htmlFor="project-location">Локация</label>
           <input
+            id="project-location"
             type="text"
             name="location"
             value={formData.location}
             onChange={handleChange}
-            placeholder="Город или адрес..."
+            placeholder="Город, адрес или площадка"
           />
         </div>
 
         <div className="form-group">
-        <label>Контактная информация:*</label>
-        <input
-          type="text"
-          name="contactInfo"
-          value={formData.contactInfo}
-          onChange={handleContactInfoChange}
-          placeholder="Email или телефон (+79991234567)"
-          required
-        />
-        <small>Укажите email или телефон для связи</small>
-      </div>
+          <label htmlFor="project-contact">Контакты для связи</label>
+          <input
+            id="project-contact"
+            type="text"
+            name="contactInfo"
+            value={formData.contactInfo}
+            onChange={handleContactInfoChange}
+            placeholder="Email или телефон в формате +79991234567"
+            required
+          />
+          <small>Поддерживаются email и российский номер телефона.</small>
+        </div>
 
         <div className="form-group">
-          <label>Статус:*</label>
-          <select
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            required
-          >
+          <label htmlFor="project-status">Режим публикации</label>
+          <select id="project-status" name="status" value={formData.status} onChange={handleChange} required>
             <option value="DRAFT">Черновик</option>
-            <option value="ACTIVE">Активный</option>
+            <option value="ACTIVE">Отправить на публикацию</option>
           </select>
           <small>
-            {formData.status === 'DRAFT' 
-              ? 'Проект будет сохранен как черновик и не будет виден другим пользователям'
-              : 'Проект будет сразу опубликован и станет доступен для просмотра'
-            }
+            {formData.status === "DRAFT"
+              ? "Черновик не будет виден пользователям, пока вы не опубликуете его позже."
+              : "Для организатора проект пройдет модерацию и станет активным после одобрения."}
           </small>
         </div>
 
-        <button 
-          type="submit" 
-          className="submit-btn"
-          disabled={loading}
-        >
-          {loading ? 'Создание...' : 'Создать проект'}
-        </button>
+        <div className="project-form-actions">
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            <Icon name={loading ? "hourglass_top" : "save"} />
+            <span>{loading ? "Сохраняем..." : "Сохранить проект"}</span>
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={() => navigate(-1)} disabled={loading}>
+            <Icon name="arrow_back" />
+            <span>Назад</span>
+          </button>
+        </div>
       </form>
     </div>
   );

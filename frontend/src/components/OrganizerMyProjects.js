@@ -1,119 +1,85 @@
 import React, { useEffect, useMemo, useState } from "react";
+
 import api from "../api/client";
 import EditProjectModal from "./EditProjectModal";
-/**
- * OrganizerMyProjects
- * - показывает проекты организатора (без черновиков)
- * - фильтр по статусу применяется кнопкой "Применить"
- * - редактирование через модалку (без перехода на страницу)
- */
+import EmptyState from "./ui/EmptyState";
+import Icon from "./ui/Icon";
+import StatusPill from "./ui/StatusPill";
+import { useFeedback } from "./ui/FeedbackProvider";
+import { getProjectStatusMeta } from "../utils/presentation";
+import { formatDate } from "../utils/formatters";
+
 function OrganizerMyProjects() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
-
   const [status, setStatus] = useState("ALL");
   const [search, setSearch] = useState("");
-
   const [editingProject, setEditingProject] = useState(null);
+
+  const { confirm, error, success } = useFeedback();
 
   const fetchMyProjects = async () => {
     setLoading(true);
     try {
-      const resp = await api.get("/api/projects/organizer", {
+      const response = await api.get("/api/projects/organizer", {
         params: {
           status,
-          includeDrafts: false, // ✅ черновики только во вкладке "Черновики"
+          includeDrafts: false,
           search,
         },
       });
 
-      const data = resp?.data;
+      const data = response?.data;
       const list = Array.isArray(data) ? data : data?.projects || [];
       setProjects(list);
-    } catch (e) {
-      console.error("Ошибка при загрузке проектов организатора:", e);
-      const msg =
-        e?.response?.data?.error ||
-        e?.response?.data?.message ||
-        (e?.response?.status ? `HTTP ${e.response.status}` : "") ||
-        "Не удалось загрузить проекты организатора";
-      alert(msg);
+    } catch (requestError) {
+      console.error("Ошибка при загрузке проектов организатора:", requestError);
+      error(
+        requestError?.response?.data?.error ||
+          requestError?.response?.data?.message ||
+          "Не удалось загрузить проекты организатора"
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (project) => {
-  const ok = window.confirm(
-    `Удалить проект "${project.title}"?\n\nЭто действие нельзя отменить.`
-  );
-  if (!ok) return;
-
-  try {
-    await api.delete(`/api/projects/${project.id}`);
-    await fetchMyProjects(); // обновляем список
-  } catch (e) {
-    console.error("Ошибка удаления проекта:", e);
-    alert(
-      e?.response?.data?.error ||
-        e?.response?.data?.message ||
-        "Не удалось удалить проект"
-    );
-  }
-};
-
   useEffect(() => {
     fetchMyProjects();
   }, []);
 
-  const statusRu = (s) => {
-    switch ((s || "").toUpperCase()) {
-      case "ACTIVE":
-        return "Активный";
-      case "COMPLETED":
-        return "Завершён";
-      case "CANCELLED":
-        return "Отменён";
-      default:
-        return s || "—";
-    }
-  };
-
-  const statusBadgeStyle = (s) => {
-    const base = {
-      display: "inline-flex",
-      alignItems: "center",
-      padding: "4px 10px",
-      borderRadius: 999,
-      fontSize: 12,
-      fontWeight: 700,
-      border: "1px solid rgba(0,0,0,0.08)",
-      background: "rgba(0,0,0,0.06)",
-    };
-    const up = (s || "").toUpperCase();
-    if (up === "ACTIVE") return { ...base, background: "rgba(46, 204, 113, 0.12)" };
-    if (up === "COMPLETED") return { ...base, background: "rgba(52, 152, 219, 0.12)" };
-    if (up === "CANCELLED") return { ...base, background: "rgba(231, 76, 60, 0.12)" };
-    return base;
-  };
-
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return projects;
+    const query = search.trim().toLowerCase();
+    if (!query) return projects;
 
-    return projects.filter((p) => {
-      const title = (p.title || "").toLowerCase();
-      const location = (p.location || "").toLowerCase();
-      const contactInfo = (p.contactInfo || "").toLowerCase();
-      const description = (p.description || "").toLowerCase();
-      return (
-        title.includes(q) ||
-        location.includes(q) ||
-        contactInfo.includes(q) ||
-        description.includes(q)
-      );
+    return projects.filter((project) => {
+      const haystack = `${project.title || ""} ${project.location || ""} ${project.contactInfo || ""} ${
+        project.description || ""
+      }`.toLowerCase();
+      return haystack.includes(query);
     });
   }, [projects, search]);
+
+  const handleDelete = async (project) => {
+    const approved = await confirm({
+      title: "Удалить проект?",
+      message: `Проект «${project.title}» будет удален без возможности восстановления.`,
+      confirmLabel: "Удалить",
+      cancelLabel: "Оставить",
+      tone: "danger",
+    });
+
+    if (!approved) return;
+
+    try {
+      await api.delete(`/api/projects/${project.id}`);
+      success("Проект удален.");
+      await fetchMyProjects();
+    } catch (requestError) {
+      console.error("Ошибка удаления проекта:", requestError);
+      error(requestError?.response?.data?.error || requestError?.response?.data?.message || "Не удалось удалить проект");
+    }
+  };
 
   const handleUpdated = async () => {
     setEditingProject(null);
@@ -121,82 +87,89 @@ function OrganizerMyProjects() {
   };
 
   return (
-    <div>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+    <div className="organizer-projects-grid">
+      <div className="organizer-projects-toolbar">
         <input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Поиск: название/локация/контакты"
-          style={{ padding: 8, minWidth: 260 }}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Поиск по названию, локации и контактам"
         />
 
-        <select value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: 8 }}>
-          <option value="ALL">Все</option>
+        <select value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="ALL">Все проекты</option>
           <option value="ACTIVE">Активные</option>
           <option value="COMPLETED">Завершенные</option>
           <option value="CANCELLED">Отмененные</option>
         </select>
 
-        <button type="button" onClick={fetchMyProjects} disabled={loading}>
-          ✅ Применить
+        <button type="button" className="btn btn-secondary" onClick={fetchMyProjects} disabled={loading}>
+          <Icon name="refresh" />
+          <span>Обновить</span>
         </button>
       </div>
 
       {loading ? (
-        <div className="loading">Загрузка проектов...</div>
+        <div className="loading">Загружаем проекты...</div>
       ) : filtered.length === 0 ? (
-        <div>Проекты не найдены.</div>
+        <EmptyState
+          icon="folder_open"
+          title="Проекты не найдены"
+          description="Попробуйте изменить фильтр или поисковый запрос."
+        />
       ) : (
-        <div style={{ display: "grid", gap: 12 }}>
-          {filtered.map((p) => (
-            <div
-              key={p.id}
-              style={{
-                border: "1px solid rgba(0,0,0,0.08)",
-                borderRadius: 12,
-                padding: 12,
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ fontWeight: 800, marginBottom: 2 }}>{p.title}</div>
-                    <span style={statusBadgeStyle(p.status)}>{statusRu(p.status)}</span>
+        <div className="organizer-projects-list">
+          {filtered.map((project) => {
+            const statusMeta = getProjectStatusMeta(project.status);
+
+            return (
+              <article key={project.id} className="project-card organizer-project-card">
+                <div className="project-header">
+                  <div className="project-title-section">
+                    <h2>{project.title}</h2>
+                    <StatusPill label={statusMeta.label} tone={statusMeta.tone} />
                   </div>
 
-                  <div style={{ fontSize: 14, opacity: 0.85 }}>
-                    {p.startDate ? `📅 ${new Date(p.startDate).toLocaleDateString("ru-RU")}` : ""}
-                    {p.endDate ? ` — ${new Date(p.endDate).toLocaleDateString("ru-RU")}` : ""}
-                    {p.location ? ` • 📍 ${p.location}` : ""}
-                  </div>
-
-                  {p.contactInfo && (
-                    <div style={{ fontSize: 14, marginTop: 2 }}>☎️ {p.contactInfo}</div>
-                  )}
-                </div>
-
-                <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                  <button type="button" onClick={() => setEditingProject(p)}>
-                    ✏️ Редактировать
-                  </button>
-
-                  <button type="button" onClick={() => handleDelete(p)}>
-                    🗑️ Удалить
+                  <div className="project-actions project-actions-inline">
+                    <button type="button" className="btn btn-secondary" onClick={() => setEditingProject(project)}>
+                      <Icon name="edit" />
+                      <span>Изменить</span>
                     </button>
+                    <button type="button" className="btn btn-danger" onClick={() => handleDelete(project)}>
+                      <Icon name="delete" />
+                      <span>Удалить</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {p.description && (
-                <div style={{ marginTop: 8, fontSize: 14, opacity: 0.9 }}>{p.description}</div>
-              )}
-            </div>
-          ))}
+                <p>{project.description || "Описание пока не заполнено."}</p>
+
+                <div className="project-meta">
+                  <div className="meta-item">
+                    <strong>Дата</strong>
+                    <span>{project.startDate ? formatDate(project.startDate) : "Не указана"}</span>
+                  </div>
+                  <div className="meta-item">
+                    <strong>Локация</strong>
+                    <span>{project.location || "Не указана"}</span>
+                  </div>
+                  <div className="meta-item meta-item-wide meta-item-contacts">
+                    <strong>Контакты</strong>
+                    <span>{project.contactInfo || "Не указаны"}</span>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
 
-      {editingProject && (
-        <EditProjectModal project={editingProject} onClose={() => setEditingProject(null)} onUpdated={handleUpdated} />
-      )}
+      {editingProject ? (
+        <EditProjectModal
+          project={editingProject}
+          onClose={() => setEditingProject(null)}
+          onUpdated={handleUpdated}
+        />
+      ) : null}
     </div>
   );
 }

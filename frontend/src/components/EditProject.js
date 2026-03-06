@@ -1,136 +1,126 @@
-import React, { useState, useEffect } from 'react';
-import api from "../api/client";
-import { useParams, useNavigate } from 'react-router-dom';
-import './CreateProject.css'; // Используем те же стили
+import React, { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
-function EditProject({ user }) {
+import api from "../api/client";
+import { useFeedback } from "./ui/FeedbackProvider";
+import { PROJECT_TYPE_OPTIONS } from "../utils/presentation";
+import { toDateInputValue } from "../utils/formatters";
+import "./CreateProject.css";
+
+function EditProject() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { error, success } = useFeedback();
+
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    status: 'DRAFT',
-    startDate: '',
-    endDate: '',
-    location: '',
-    projectType: '',
+    title: "",
+    description: "",
+    status: "DRAFT",
+    startDate: "",
+    endDate: "",
+    location: "",
+    projectType: "",
     volunteersRequired: 1,
-    contactInfo: ''
+    contactInfo: "",
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const projectTypes = [
-    { value: 'ECOLOGY', label: '🌱 Экология' },
-    { value: 'ANIMAL_WELFARE', label: '🐾 Защита животных' },
-    { value: 'EDUCATION', label: '📚 Образование' },
-    { value: 'SOCIAL', label: '❤️ Социальная помощь' },
-    { value: 'CULTURAL', label: '🎨 Культура' },
-    { value: 'SPORTS', label: '⚽ Спорт' },
-    { value: 'MEDICAL', label: '🏥 Медицина' },
-    { value: 'OTHER', label: '🔧 Другое' }
-  ];
-
   useEffect(() => {
+    const fetchProject = async () => {
+      try {
+        const response = await api.get(`/api/projects/${id}`);
+        const project = response.data;
+        setFormData({
+          title: project.title || "",
+          description: project.description || "",
+          status: project.status || "DRAFT",
+          startDate: toDateInputValue(project.startDate),
+          endDate: toDateInputValue(project.endDate),
+          location: project.location || "",
+          projectType: project.projectType || "",
+          volunteersRequired: project.volunteersRequired || 1,
+          contactInfo: project.contactInfo || "",
+        });
+      } catch (requestError) {
+        console.error("Ошибка при загрузке проекта:", requestError);
+        error("Не удалось загрузить проект");
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchProject();
-  }, [id]);
+  }, [error, id]);
 
-  const fetchProject = async () => {
-    try {
-      const response = await api.get(`/api/projects/${id}`);
-
-      const project = response.data;
-      setFormData({
-        title: project.title,
-        description: project.description,
-        status: project.status,
-        startDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
-        endDate: project.endDate ? new Date(project.endDate).toISOString().split('T')[0] : '',
-        location: project.location || '',
-        projectType: project.projectType || '',
-        volunteersRequired: project.volunteersRequired || 1,
-        contactInfo: project.contactInfo || ''
-      });
-      setLoading(false);
-    } catch (error) {
-      console.error('Ошибка при загрузке проекта:', error);
-      alert('Не удалось загрузить проект');
-      setLoading(false);
-    }
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prevState => ({
-      ...prevState,
-      [name]: value
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (saving) return;
+
     setSaving(true);
-
     try {
-      const dataToSend = {
+      await api.put(`/api/projects/${id}`, {
         ...formData,
-        volunteersRequired: parseInt(formData.volunteersRequired),
+        volunteersRequired: Number.parseInt(formData.volunteersRequired, 10),
         startDate: formData.startDate || null,
-        endDate: formData.endDate || null
-      };
+        endDate: formData.endDate || null,
+      });
 
-      await api.put(`/api/projects/${id}`, dataToSend);
-
-      alert('Проект успешно обновлен!');
-      navigate('/profile'); // Возвращаемся в профиль
-    } catch (error) {
-      console.error('Ошибка при обновлении проекта:', error);
-      alert(error.response?.data?.error || 'Не удалось обновить проект');
+      success("Проект обновлен.");
+      navigate("/profile");
+    } catch (requestError) {
+      console.error("Ошибка при обновлении проекта:", requestError);
+      error(requestError.response?.data?.error || "Не удалось обновить проект");
     } finally {
       setSaving(false);
     }
   };
 
   if (loading) {
-    return <div className="loading">Загрузка проекта...</div>;
+    return <div className="loading">Загружаем проект...</div>;
   }
 
   return (
     <div className="create-project">
-      <h2>Редактировать проект</h2>
-      <form onSubmit={handleSubmit}>
+      <div className="page-header">
+        <div>
+          <h1>Редактирование проекта</h1>
+          <p>Измените параметры проекта без изменения маршрутов и сценариев работы.</p>
+        </div>
+      </div>
+
+      <form className="project-form-surface" onSubmit={handleSubmit}>
         <div className="form-group">
-          <label>Название проекта:*</label>
-          <input
-            type="text"
-            name="title"
-            value={formData.title}
-            onChange={handleChange}
-            required
-          />
+          <label htmlFor="edit-title">Название проекта</label>
+          <input id="edit-title" type="text" name="title" value={formData.title} onChange={handleChange} required />
         </div>
 
         <div className="form-group">
-          <label>Описание:*</label>
+          <label htmlFor="edit-description">Описание</label>
           <textarea
+            id="edit-description"
             name="description"
             value={formData.description}
             onChange={handleChange}
             required
-            rows="5"
+            rows="6"
           />
         </div>
 
         <div className="form-row">
           <div className="form-group">
-            <label>Тип проекта:</label>
-            <select
-              name="projectType"
-              value={formData.projectType}
-              onChange={handleChange}
-            >
+            <label htmlFor="edit-project-type">Тип проекта</label>
+            <select id="edit-project-type" name="projectType" value={formData.projectType} onChange={handleChange}>
               <option value="">Выберите тип</option>
-              {projectTypes.map(type => (
+              {PROJECT_TYPE_OPTIONS.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
                 </option>
@@ -139,8 +129,9 @@ function EditProject({ user }) {
           </div>
 
           <div className="form-group">
-            <label>Требуется волонтеров:*</label>
+            <label htmlFor="edit-volunteers">Требуется волонтеров</label>
             <input
+              id="edit-volunteers"
               type="number"
               name="volunteersRequired"
               value={formData.volunteersRequired}
@@ -153,57 +144,29 @@ function EditProject({ user }) {
 
         <div className="form-row">
           <div className="form-group">
-            <label>Дата начала:</label>
-            <input
-              type="date"
-              name="startDate"
-              value={formData.startDate}
-              onChange={handleChange}
-            />
+            <label htmlFor="edit-start-date">Дата начала</label>
+            <input id="edit-start-date" type="date" name="startDate" value={formData.startDate} onChange={handleChange} />
           </div>
 
           <div className="form-group">
-            <label>Дата окончания:</label>
-            <input
-              type="date"
-              name="endDate"
-              value={formData.endDate}
-              onChange={handleChange}
-            />
+            <label htmlFor="edit-end-date">Дата окончания</label>
+            <input id="edit-end-date" type="date" name="endDate" value={formData.endDate} onChange={handleChange} />
           </div>
         </div>
 
         <div className="form-group">
-          <label>Местоположение:</label>
-          <input
-            type="text"
-            name="location"
-            value={formData.location}
-            onChange={handleChange}
-            placeholder="Город или адрес..."
-          />
+          <label htmlFor="edit-location">Локация</label>
+          <input id="edit-location" type="text" name="location" value={formData.location} onChange={handleChange} />
         </div>
 
         <div className="form-group">
-          <label>Контактная информация:*</label>
-          <input
-            type="text"
-            name="contactInfo"
-            value={formData.contactInfo}
-            onChange={handleChange}
-            placeholder="Email или телефон..."
-            required
-          />
+          <label htmlFor="edit-contact-info">Контакты</label>
+          <input id="edit-contact-info" type="text" name="contactInfo" value={formData.contactInfo} onChange={handleChange} />
         </div>
 
         <div className="form-group">
-          <label>Статус:*</label>
-          <select
-            name="status"
-            value={formData.status}
-            onChange={handleChange}
-            required
-          >
+          <label htmlFor="edit-status">Статус</label>
+          <select id="edit-status" name="status" value={formData.status} onChange={handleChange} required>
             <option value="DRAFT">Черновик</option>
             <option value="ACTIVE">Активный</option>
             <option value="COMPLETED">Завершен</option>
@@ -211,19 +174,11 @@ function EditProject({ user }) {
           </select>
         </div>
 
-        <div className="form-actions">
-          <button
-            type="submit"
-            className="submit-btn"
-            disabled={saving}
-          >
-            {saving ? 'Сохранение...' : 'Сохранить изменения'}
+        <div className="project-form-actions">
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? "Сохраняем..." : "Сохранить изменения"}
           </button>
-          <button
-            type="button"
-            className="cancel-btn"
-            onClick={() => navigate('/profile')}
-          >
+          <button type="button" className="btn btn-secondary" onClick={() => navigate("/profile")} disabled={saving}>
             Отмена
           </button>
         </div>

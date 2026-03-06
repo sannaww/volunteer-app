@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import api from "./api/client";
+import "./App.css";
 
 import Navbar from "./components/Navbar";
 import ProjectList from "./components/ProjectList";
@@ -16,21 +17,18 @@ import Chat from "./components/Chat";
 import AdminPanel from "./components/AdminPanel";
 import Favorites from "./components/Favorites";
 import OrganizerCalendar from "./components/OrganizerCalendar";
+import { FeedbackProvider } from "./components/ui/FeedbackProvider";
+import { clearSession, getSessionToken, getSessionUser, setSessionUser } from "./utils/authSession";
+import { normalizeRole } from "./utils/formatters";
 
-import "./App.css";
-
-function normalizeUserRole(userData) {
+function normalizeUser(userData) {
   if (!userData || typeof userData !== "object") return userData;
-  const normalizedRole = userData.role
-    ? String(userData.role).trim().toLowerCase()
-    : userData.role;
   return {
     ...userData,
-    role: normalizedRole,
+    role: normalizeRole(userData.role),
   };
 }
 
-// ✅ защищённый доступ: если нет user -> /login, но запоминаем куда хотели попасть
 function RequireAuth({ user, loading, children }) {
   const location = useLocation();
 
@@ -43,8 +41,6 @@ function RequireAuth({ user, loading, children }) {
   return children;
 }
 
-// ✅ доступ по ролям: если нет user -> /login (и запоминаем from)
-// если роль не подходит -> на главную
 function RequireRole({ user, loading, roles = [], children }) {
   const location = useLocation();
 
@@ -65,38 +61,28 @@ function App() {
   const [user, setUser] = useState(null);
   const [appLoading, setAppLoading] = useState(true);
 
-  // ✅ Нормальная инициализация: если есть token — подтягиваем user с backend
   useEffect(() => {
     const init = async () => {
       try {
-        const token = sessionStorage.getItem("token");
+        const token = getSessionToken();
 
-        // нет токена — не авторизованы
         if (!token) {
           setUser(null);
           return;
         }
 
-        // 1) быстрый fallback из sessionStorage (чтобы UI не пустовал)
-        const savedUser = sessionStorage.getItem("user");
+        const savedUser = getSessionUser();
         if (savedUser) {
-          try {
-            const parsedUser = JSON.parse(savedUser);
-            setUser(normalizeUserRole(parsedUser));
-          } catch {
-            // ignore
-          }
+          setUser(normalizeUser(savedUser));
         }
 
-        // 2) источник истины — backend (роль/имя/блокировка и т.д.)
-        const res = await api.get("/api/auth/me");
-        const normalizedUser = normalizeUserRole(res.data);
+        const response = await api.get("/api/auth/me");
+        const normalizedUser = normalizeUser(response.data);
         setUser(normalizedUser);
-        sessionStorage.setItem("user", JSON.stringify(normalizedUser));
+        setSessionUser(normalizedUser);
       } catch (error) {
         console.error("Ошибка инициализации пользователя:", error);
-        sessionStorage.removeItem("token");
-        sessionStorage.removeItem("user");
+        clearSession();
         setUser(null);
       } finally {
         setAppLoading(false);
@@ -107,128 +93,110 @@ function App() {
   }, []);
 
   const handleLogin = (userData) => {
-    const normalizedUser = normalizeUserRole(userData);
+    const normalizedUser = normalizeUser(userData);
     setUser(normalizedUser);
-    sessionStorage.setItem("user", JSON.stringify(normalizedUser));
+    setSessionUser(normalizedUser);
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem("token");
-    sessionStorage.removeItem("user");
+    clearSession();
     setUser(null);
   };
 
   const handleUserUpdate = (updatedUser) => {
-    const normalizedUser = normalizeUserRole(updatedUser);
+    const normalizedUser = normalizeUser(updatedUser);
     setUser(normalizedUser);
-    sessionStorage.setItem("user", JSON.stringify(normalizedUser));
+    setSessionUser(normalizedUser);
   };
 
   return (
-    <Router>
-      <div className="App">
-        <Navbar user={user} onLogout={handleLogout} />
-        <main>
-          <Routes>
-            {/* Общая страница */}
-            <Route path="/" element={<ProjectList user={user} />} />
-
-            {/* Auth */}
-            <Route path="/register" element={<Register onLogin={handleLogin} />} />
-            <Route path="/login" element={<Login onLogin={handleLogin} />} />
-
-            {/* ✅ Organizer Calendar — ВАЖНО: ДО fallback */}
-            <Route
-              path="/organizer/calendar"
-              element={
-                <RequireRole user={user} loading={appLoading} roles={["organizer", "admin"]}>
-                  <OrganizerCalendar />
-                </RequireRole>
-              }
-            />
-
-            {/* Organizer */}
-            <Route
-              path="/create-project"
-              element={
-                <RequireRole user={user} loading={appLoading} roles={["organizer", "admin"]}>
-                  <CreateProject user={user} />
-                </RequireRole>
-              }
-            />
-
-            <Route
-              path="/project-applications/:projectId"
-              element={
-                <RequireRole user={user} loading={appLoading} roles={["organizer", "admin"]}>
-                  <ProjectApplications user={user} />
-                </RequireRole>
-              }
-            />
-
-            <Route
-              path="/edit-project/:id"
-              element={
-                <RequireRole user={user} loading={appLoading} roles={["organizer", "admin"]}>
-                  <EditProject user={user} />
-                </RequireRole>
-              }
-            />
-
-            {/* Volunteer */}
-            <Route
-              path="/my-applications"
-              element={
-                <RequireRole user={user} loading={appLoading} roles={["volunteer"]}>
-                  <MyApplications user={user} />
-                </RequireRole>
-              }
-            />
-
-            <Route
-              path="/favorites"
-              element={
-                <RequireRole user={user} loading={appLoading} roles={["volunteer"]}>
-                  <Favorites />
-                </RequireRole>
-              }
-            />
-
-            {/* Admin */}
-            <Route
-              path="/admin"
-              element={
-                <RequireRole user={user} loading={appLoading} roles={["admin"]}>
-                  <AdminPanel user={user} />
-                </RequireRole>
-              }
-            />
-
-            {/* Общие (все авторизованные) */}
-            <Route
-              path="/profile"
-              element={
-                <RequireAuth user={user} loading={appLoading}>
-                  <Profile user={user} onUserUpdate={handleUserUpdate} />
-                </RequireAuth>
-              }
-            />
-
-            <Route
-              path="/chat"
-              element={
-                <RequireAuth user={user} loading={appLoading}>
-                  <Chat user={user} />
-                </RequireAuth>
-              }
-            />
-
-            {/* fallback — всегда последним */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </main>
-      </div>
-    </Router>
+    <FeedbackProvider>
+      <Router>
+        <div className="App">
+          <Navbar user={user} onLogout={handleLogout} />
+          <main className="app-main">
+            <Routes>
+              <Route path="/" element={<ProjectList user={user} />} />
+              <Route path="/register" element={<Register onLogin={handleLogin} />} />
+              <Route path="/login" element={<Login onLogin={handleLogin} />} />
+              <Route
+                path="/organizer/calendar"
+                element={
+                  <RequireRole user={user} loading={appLoading} roles={["organizer", "admin"]}>
+                    <OrganizerCalendar />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/create-project"
+                element={
+                  <RequireRole user={user} loading={appLoading} roles={["organizer", "admin"]}>
+                    <CreateProject user={user} />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/project-applications/:projectId"
+                element={
+                  <RequireRole user={user} loading={appLoading} roles={["organizer", "admin"]}>
+                    <ProjectApplications user={user} />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/edit-project/:id"
+                element={
+                  <RequireRole user={user} loading={appLoading} roles={["organizer", "admin"]}>
+                    <EditProject user={user} />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/my-applications"
+                element={
+                  <RequireRole user={user} loading={appLoading} roles={["volunteer"]}>
+                    <MyApplications user={user} />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/favorites"
+                element={
+                  <RequireRole user={user} loading={appLoading} roles={["volunteer"]}>
+                    <Favorites />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <RequireRole user={user} loading={appLoading} roles={["admin"]}>
+                    <AdminPanel user={user} />
+                  </RequireRole>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <RequireAuth user={user} loading={appLoading}>
+                    <Profile user={user} onUserUpdate={handleUserUpdate} />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/chat"
+                element={
+                  <RequireAuth user={user} loading={appLoading}>
+                    <Chat user={user} />
+                  </RequireAuth>
+                }
+              />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </main>
+        </div>
+      </Router>
+    </FeedbackProvider>
   );
 }
 

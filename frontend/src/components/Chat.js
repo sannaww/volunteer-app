@@ -1,7 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import api from "../api/client";
 import { createSocket } from "../api/socket";
+import { consumeSelectedOrganizer } from "../utils/authSession";
+import {
+  formatTime,
+  formatPersonName,
+  truncateText,
+} from "../utils/formatters";
+import { getRoleLabel } from "../utils/presentation";
+import EmptyState from "./ui/EmptyState";
+import Icon from "./ui/Icon";
+import { useFeedback } from "./ui/FeedbackProvider";
 import "./Chat.css";
 
 function Chat({ user }) {
@@ -11,12 +22,10 @@ function Chat({ user }) {
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
-  // pagination state
   const [hasMore, setHasMore] = useState(false);
   const [nextCursor, setNextCursor] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // search in conversation (server-side)
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
@@ -28,103 +37,80 @@ function Chat({ user }) {
 
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
-  const socketRef = useRef(null);
-
-  // ✅ FIX: searchInputRef должен существовать
   const searchInputRef = useRef(null);
-
-  // refs to avoid stale closures in socket callbacks
+  const socketRef = useRef(null);
   const userRef = useRef(user);
-  const activeConvRef = useRef(activeConversation);
+  const activeConversationRef = useRef(activeConversation);
 
   const navigate = useNavigate();
+  const { confirm, error } = useFeedback();
 
   useEffect(() => {
     userRef.current = user;
   }, [user]);
 
   useEffect(() => {
-    activeConvRef.current = activeConversation;
+    activeConversationRef.current = activeConversation;
   }, [activeConversation]);
 
-  // -------- helpers --------
-  const displayName = (u) => {
-    if (!u) return "Пользователь";
-    if (u.firstName && u.lastName) return `${u.firstName} ${u.lastName}`;
-    if (u.firstName) return u.firstName;
-    if (u.lastName) return u.lastName;
-    if (u.id != null) return `Пользователь #${u.id}`;
-    return "Пользователь";
-  };
+  const getInitials = (person) => {
+    const first = person?.firstName?.trim()?.charAt(0);
+    const last = person?.lastName?.trim()?.charAt(0);
 
-  const displayRole = (role) => {
-    if (role === "organizer") return "Организатор";
-    if (role === "volunteer") return "Волонтер";
-    if (role === "admin") return "Администратор";
-    return "Пользователь";
-  };
-
-  const initials = (u) => {
-    const first = u?.firstName?.trim()?.[0];
-    const last = u?.lastName?.trim()?.[0];
     if (first && last) return `${first}${last}`;
     if (first) return first;
     if (last) return last;
     return "?";
   };
 
-  const formatTime = (dateString) => {
-    return new Date(dateString).toLocaleTimeString("ru-RU", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const addMessageIfNotExists = (msg) => {
+  const addMessageIfNotExists = (message) => {
     setMessages((prev) => {
-      if (!msg?.id) return [...prev, msg];
-      if (prev.some((m) => m?.id === msg.id)) return prev;
-      return [...prev, msg];
+      if (!message?.id) return [...prev, message];
+      if (prev.some((item) => item?.id === message.id)) return prev;
+      return [...prev, message];
     });
   };
 
   const updateMessageStatus = (messageId, patch) => {
-    setMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, ...patch } : m)));
+    setMessages((prev) => prev.map((item) => (item.id === messageId ? { ...item, ...patch } : item)));
   };
 
-  const updateManyMessageStatus = (ids, patch) => {
-    const setIds = new Set(ids || []);
-    setMessages((prev) => prev.map((m) => (setIds.has(m.id) ? { ...m, ...patch } : m)));
+  const updateManyMessageStatus = (messageIds, patch) => {
+    const ids = new Set(messageIds || []);
+    setMessages((prev) => prev.map((item) => (ids.has(item.id) ? { ...item, ...patch } : item)));
   };
 
-  // -------- search helpers --------
-  const escapeRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  const highlightText = (text, q) => {
-    if (!q?.trim()) return text;
-    const query = q.trim();
-    const re = new RegExp(escapeRegExp(query), "ig");
-    const raw = String(text ?? "");
-    const matches = raw.match(re);
-    if (!matches) return raw;
+  const highlightText = (text, query) => {
+    if (!query?.trim()) return text;
 
-    const parts = raw.split(re);
-    const out = [];
-    for (let i = 0; i < parts.length; i++) {
-      out.push(parts[i]);
-      if (i < matches.length) {
-        out.push(
-          <mark key={`${i}-${matches[i]}-${Math.random()}`} className="chat-highlight">
-            {matches[i]}
+    const matcher = new RegExp(escapeRegExp(query.trim()), "ig");
+    const rawText = String(text || "");
+    const matches = rawText.match(matcher);
+
+    if (!matches) return rawText;
+
+    const parts = rawText.split(matcher);
+    const output = [];
+
+    for (let index = 0; index < parts.length; index += 1) {
+      output.push(parts[index]);
+
+      if (index < matches.length) {
+        output.push(
+          <mark key={`match-${index}`} className="chat-highlight">
+            {matches[index]}
           </mark>
         );
       }
     }
-    return out;
+
+    return output;
   };
 
   const resetSearch = () => {
@@ -137,34 +123,103 @@ function Chat({ user }) {
     setHighlightMessageId(null);
   };
 
-  const jumpToMessage = async (messageId) => {
-    const conv = activeConversation;
-    if (!conv?.user?.id || !messageId) return;
+  const fetchConversations = async () => {
+    if (!userRef.current) return;
 
     try {
-      const { data } = await api.get(
-        `/api/messages/conversation/${conv.user.id}/around/${messageId}?before=30&after=30`
-      );
+      const response = await api.get("/api/messages/conversations");
+      setConversations(Array.isArray(response.data) ? response.data : []);
+    } catch (requestError) {
+      console.error("Ошибка при загрузке диалогов:", requestError);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      const items = data?.items || [];
+  const fetchMessages = async (conversation) => {
+    if (!userRef.current || !conversation?.user?.id) return;
+
+    try {
+      const response = await api.get(`/api/messages/conversation/${conversation.user.id}?limit=50`);
+      const data = response.data;
+      const items = Array.isArray(data) ? data : data?.items || [];
+
+      setMessages(items);
+      setHasMore(!Array.isArray(data) && Boolean(data?.hasMore));
+      setNextCursor(!Array.isArray(data) ? data?.nextCursor || null : null);
+      window.setTimeout(scrollToBottom, 0);
+    } catch (requestError) {
+      console.error("Ошибка при загрузке сообщений:", requestError);
+    }
+  };
+
+  const loadMoreMessages = async () => {
+    const conversation = activeConversationRef.current;
+
+    if (!conversation?.user?.id || !hasMore || !nextCursor || loadingMore) return;
+
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    try {
+      setLoadingMore(true);
+
+      const previousHeight = container.scrollHeight;
+      const previousScrollTop = container.scrollTop;
+
+      const response = await api.get(
+        `/api/messages/conversation/${conversation.user.id}?cursor=${nextCursor}&limit=50`
+      );
+      const data = response.data;
+      const items = Array.isArray(data) ? data : data?.items || [];
+
+      if (items.length) {
+        setMessages((prev) => [...items, ...prev]);
+      }
+
+      setHasMore(!Array.isArray(data) && Boolean(data?.hasMore));
+      setNextCursor(!Array.isArray(data) ? data?.nextCursor || null : null);
+
+      window.setTimeout(() => {
+        const nextHeight = container.scrollHeight;
+        container.scrollTop = previousScrollTop + (nextHeight - previousHeight);
+      }, 0);
+    } catch (requestError) {
+      console.error("Ошибка при подгрузке истории:", requestError);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const jumpToMessage = async (messageId) => {
+    const conversation = activeConversationRef.current;
+
+    if (!conversation?.user?.id || !messageId) return;
+
+    try {
+      const response = await api.get(
+        `/api/messages/conversation/${conversation.user.id}/around/${messageId}?before=30&after=30`
+      );
+      const items = response.data?.items || [];
+
       setMessages(items);
 
-      setTimeout(() => {
-        const el = document.getElementById(`msg-${messageId}`);
-        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => {
+        const element = document.getElementById(`msg-${messageId}`);
+        element?.scrollIntoView({ behavior: "smooth", block: "center" });
         setHighlightMessageId(messageId);
-        setTimeout(() => setHighlightMessageId(null), 1200);
+        window.setTimeout(() => setHighlightMessageId(null), 1200);
       }, 0);
-    } catch (e) {
-      console.error("jumpToMessage error:", e);
+    } catch (requestError) {
+      console.error("Ошибка перехода к сообщению:", requestError);
     }
   };
 
   const runSearch = async ({ reset = true } = {}) => {
-    const conv = activeConversation;
-    const q = searchQuery.trim();
+    const conversation = activeConversationRef.current;
+    const query = searchQuery.trim();
 
-    if (!conv?.user?.id || !q) {
+    if (!conversation?.user?.id || !query) {
       setSearchHits([]);
       setSearchIndex(0);
       setSearchHasMore(false);
@@ -177,22 +232,26 @@ function Chat({ user }) {
 
       const cursorPart =
         !reset && searchNextCursor ? `&cursor=${encodeURIComponent(searchNextCursor)}` : "";
-
-      const url = `/api/messages/conversation/${conv.user.id}/search?q=${encodeURIComponent(
-        q
-      )}&limit=20${cursorPart}`;
-
-      const { data } = await api.get(url);
-      const items = data?.items || [];
+      const response = await api.get(
+        `/api/messages/conversation/${conversation.user.id}/search?q=${encodeURIComponent(
+          query
+        )}&limit=20${cursorPart}`
+      );
+      const items = response.data?.items || [];
 
       setSearchHits((prev) => (reset ? items : [...prev, ...items]));
-      setSearchHasMore(Boolean(data?.hasMore));
-      setSearchNextCursor(data?.nextCursor || null);
+      setSearchHasMore(Boolean(response.data?.hasMore));
+      setSearchNextCursor(response.data?.nextCursor || null);
 
-      if (reset) setSearchIndex(0);
-      if (reset && items.length) await jumpToMessage(items[0].id);
-    } catch (e) {
-      console.error("search error:", e);
+      if (reset) {
+        setSearchIndex(0);
+      }
+
+      if (reset && items.length) {
+        await jumpToMessage(items[0].id);
+      }
+    } catch (requestError) {
+      console.error("Ошибка поиска по сообщениям:", requestError);
       setSearchHits([]);
       setSearchIndex(0);
       setSearchHasMore(false);
@@ -202,259 +261,59 @@ function Chat({ user }) {
     }
   };
 
-  const goToHit = async (dir) => {
+  const goToHit = async (direction) => {
     if (!searchHits.length) return;
 
-    let next = searchIndex + dir;
-    if (next < 0) next = 0;
+    let nextIndex = searchIndex + direction;
 
-    if (next >= searchHits.length && searchHasMore && searchNextCursor && !searchLoading) {
+    if (nextIndex < 0) nextIndex = 0;
+
+    if (nextIndex >= searchHits.length && searchHasMore && searchNextCursor && !searchLoading) {
       await runSearch({ reset: false });
     }
 
-    const max = Math.max(0, searchHits.length - 1);
-    next = Math.min(next, max);
+    nextIndex = Math.min(nextIndex, Math.max(0, searchHits.length - 1));
+    setSearchIndex(nextIndex);
 
-    setSearchIndex(next);
-
-    const hit = searchHits[next];
-    if (hit?.id) await jumpToMessage(hit.id);
+    const nextHit = searchHits[nextIndex];
+    if (nextHit?.id) {
+      await jumpToMessage(nextHit.id);
+    }
   };
 
-  const onSearchKeyDown = async (e) => {
-    if (e.key === "Escape") {
-      setSearchOpen(false);
+  const handleSearchKeyDown = async (event) => {
+    if (event.key === "Escape") {
+      resetSearch();
       return;
     }
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (e.shiftKey) await goToHit(-1);
-      else await goToHit(1);
-    }
-  };
 
-  useEffect(() => {
-    if (searchOpen) setTimeout(() => searchInputRef.current?.focus(), 0);
-  }, [searchOpen]);
-
-  // -------- data loading --------
-  const fetchConversations = async () => {
-    const currentUser = userRef.current;
-    if (!currentUser) return;
-
-    try {
-      const response = await api.get("/api/messages/conversations");
-      setConversations(response.data || []);
-    } catch (error) {
-      console.error("Ошибка при загрузке диалогов:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchMessages = async (conv) => {
-    const currentUser = userRef.current;
-    if (!currentUser || !conv?.user?.id) return;
-
-    try {
-      const response = await api.get(`/api/messages/conversation/${conv.user.id}?limit=50`);
-      const data = response.data;
-
-      const items = Array.isArray(data) ? data : data?.items || [];
-      setMessages(items);
-
-      setHasMore(!Array.isArray(data) && Boolean(data?.hasMore));
-      setNextCursor(!Array.isArray(data) ? data?.nextCursor || null : null);
-
-      setTimeout(scrollToBottom, 0);
-    } catch (error) {
-      console.error("Ошибка при загрузке сообщений:", error);
-    }
-  };
-
-  const loadMoreMessages = async () => {
-    const conv = activeConversation;
-    if (!conv?.user?.id) return;
-    if (!hasMore || !nextCursor || loadingMore) return;
-
-    const container = messagesContainerRef.current;
-    if (!container) return;
-
-    try {
-      setLoadingMore(true);
-
-      const prevScrollHeight = container.scrollHeight;
-      const prevScrollTop = container.scrollTop;
-
-      const response = await api.get(
-        `/api/messages/conversation/${conv.user.id}?cursor=${nextCursor}&limit=50`
-      );
-      const data = response.data;
-
-      const items = Array.isArray(data) ? data : data?.items || [];
-      if (items.length) setMessages((prev) => [...items, ...prev]);
-
-      setHasMore(!Array.isArray(data) && Boolean(data?.hasMore));
-      setNextCursor(!Array.isArray(data) ? data?.nextCursor || null : null);
-
-      setTimeout(() => {
-        const newScrollHeight = container.scrollHeight;
-        container.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
-      }, 0);
-    } catch (e) {
-      console.error("Ошибка при подгрузке истории:", e);
-    } finally {
-      setLoadingMore(false);
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (event.shiftKey) {
+        await goToHit(-1);
+      } else {
+        await goToHit(1);
+      }
     }
   };
 
   const handleScroll = () => {
     const container = messagesContainerRef.current;
-    if (!container) return;
-    if (container.scrollTop <= 80) loadMoreMessages();
+    if (container?.scrollTop <= 80) {
+      loadMoreMessages();
+    }
   };
 
-  // -------- lifecycle --------
-  useEffect(() => {
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-    fetchConversations();
-    window.dispatchEvent(new Event("unread:update"));
-  }, [user, navigate]);
-
-  useEffect(() => {
-    if (!activeConversation) return;
-
-    setMessages([]);
-    setHasMore(false);
-    setNextCursor(null);
-    resetSearch();
-
-    fetchMessages(activeConversation);
-  }, [activeConversation]);
-
-  // organizer из sessionStorage
-  useEffect(() => {
-    const savedOrganizer = sessionStorage.getItem("selectedOrganizer");
-    if (!savedOrganizer) return;
-
-    try {
-      const organizer = JSON.parse(savedOrganizer);
-      handleNewConversation(organizer);
-    } catch (e) {
-      console.error("Не удалось прочитать selectedOrganizer:", e);
-    } finally {
-      sessionStorage.removeItem("selectedOrganizer");
-    }
-  }, []);
-
-  function markConversationAsReadLocal(partnerId) {
+  const markConversationAsReadLocal = (partnerId) => {
     setConversations((prev) =>
-      (prev || []).map((c) => (c?.user?.id === partnerId ? { ...c, unreadCount: 0 } : c))
+      prev.map((conversation) =>
+        conversation?.user?.id === partnerId ? { ...conversation, unreadCount: 0 } : conversation
+      )
     );
 
     window.dispatchEvent(new Event("unread:update"));
-  }
+  };
 
-  // -------- Socket.IO connect (once) --------
-  useEffect(() => {
-    const s = createSocket();
-    socketRef.current = s;
-
-    const onConnect = () => console.log("WS connected", s.id);
-    const onConnectError = (e) => console.log("WS connect_error:", e.message);
-
-    const onNew = (msg) => {
-      const currentUser = userRef.current;
-      const conv = activeConvRef.current;
-
-      fetchConversations();
-
-      if (!conv?.user?.id || !currentUser?.id) return;
-
-      const partnerId = conv.user.id;
-      const isForThisChat =
-        (msg.senderId === partnerId && msg.receiverId === currentUser.id) ||
-        (msg.senderId === currentUser.id && msg.receiverId === partnerId);
-
-      if (isForThisChat) {
-        addMessageIfNotExists(msg);
-        setTimeout(scrollToBottom, 0);
-
-        s.emit("conversation:read", { partnerId });
-        markConversationAsReadLocal(partnerId);
-        window.dispatchEvent(new Event("unread:update"));
-      }
-    };
-
-    const onSent = (msg) => {
-      addMessageIfNotExists(msg);
-      fetchConversations();
-      setTimeout(scrollToBottom, 0);
-    };
-
-    const onDelivered = (payload) => {
-      if (!payload?.messageId) return;
-      updateMessageStatus(payload.messageId, { deliveredAt: payload.deliveredAt });
-    };
-
-    const onRead = (payload) => {
-      const ids = payload?.messageIds || [];
-      if (!ids.length) return;
-      updateManyMessageStatus(ids, { readAt: payload.readAt });
-    };
-
-    const onMsgError = (e) => {
-      console.log("WS message:error", e);
-      alert("Не удалось отправить сообщение: " + (e?.error || "WS error"));
-    };
-
-    s.on("connect", onConnect);
-    s.on("connect_error", onConnectError);
-    s.on("message:new", onNew);
-    s.on("message:sent", onSent);
-    s.on("message:delivered", onDelivered);
-    s.on("messages:read", onRead);
-    s.on("message:error", onMsgError);
-
-    return () => {
-      s.off("connect", onConnect);
-      s.off("connect_error", onConnectError);
-      s.off("message:new", onNew);
-      s.off("message:sent", onSent);
-      s.off("message:delivered", onDelivered);
-      s.off("messages:read", onRead);
-      s.off("message:error", onMsgError);
-      s.disconnect();
-    };
-  }, []);
-
-  // когда выбираем диалог — отмечаем как прочитано
-  useEffect(() => {
-    const conv = activeConversation;
-    const currentUser = user;
-
-    if (!conv?.user?.id || !currentUser?.id) return;
-
-    const partnerId = conv.user.id;
-
-    const sendRead = () => {
-      const s = socketRef.current;
-      if (!s || !s.connected) return false;
-      s.emit("conversation:read", { partnerId });
-      markConversationAsReadLocal(partnerId);
-      return true;
-    };
-
-    if (!sendRead()) {
-      setTimeout(() => sendRead(), 300);
-      setTimeout(() => sendRead(), 800);
-    }
-  }, [activeConversation, user]);
-
-  // -------- conversation actions --------
   const handleSelectConversation = (conversation) => {
     setActiveConversation(conversation);
   };
@@ -462,30 +321,33 @@ function Chat({ user }) {
   const handleNewConversation = (organizer) => {
     if (!organizer?.id) return;
 
-    const existingConversation = conversations.find((conv) => conv?.user?.id === organizer.id);
+    const existingConversation = conversations.find(
+      (conversation) => conversation?.user?.id === organizer.id
+    );
+
     if (existingConversation) {
       setActiveConversation(existingConversation);
       return;
     }
 
-    const newConversation = {
+    setActiveConversation({
       user: {
         id: organizer.id,
         firstName: organizer.firstName ?? null,
         lastName: organizer.lastName ?? null,
         role: organizer.role ?? "organizer",
       },
-      lastMessage: { text: "Новый диалог", createdAt: new Date().toISOString() },
+      lastMessage: {
+        text: "",
+        createdAt: new Date().toISOString(),
+      },
       unreadCount: 0,
       isNew: true,
-    };
-
-    setActiveConversation(newConversation);
+    });
   };
 
-  // -------- send message --------
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
+  const handleSendMessage = async (event) => {
+    event.preventDefault();
 
     if (!newMessage.trim() || !user || !activeConversation?.user?.id) return;
 
@@ -495,266 +357,398 @@ function Chat({ user }) {
     try {
       const socket = socketRef.current;
 
-      if (socket && socket.connected) {
+      if (socket?.connected) {
         socket.emit("message:send", { receiverId, text });
         setNewMessage("");
         return;
       }
 
-      // fallback HTTP (на всякий случай)
       await api.post("/api/messages", { receiverId, text });
       setNewMessage("");
 
       await fetchMessages(activeConversation);
       await fetchConversations();
       scrollToBottom();
-    } catch (error) {
-      console.error("Ошибка при отправке сообщения:", error);
-      alert(
-        "Не удалось отправить сообщение: " +
-          (error.response?.data?.message || error.response?.data?.error || error.message)
+    } catch (requestError) {
+      console.error("Ошибка при отправке сообщения:", requestError);
+      error(
+        requestError.response?.data?.message ||
+          requestError.response?.data?.error ||
+          "Не удалось отправить сообщение"
       );
     }
-  };
-
-  if (!user) {
-    return (
-      <div className="chat-error">
-        <h3>Требуется авторизация</h3>
-        <p>Пожалуйста, войдите в систему для доступа к чату</p>
-        <button onClick={() => navigate("/login")} className="btn btn-primary" type="button">
-          Войти
-        </button>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return <div className="chat-loading">Загрузка чата...</div>;
-  }
-
-  const getStatusIcon = (m) => {
-    if (m.senderId !== user.id) return "";
-    if (m.readAt) return "✓✓";
-    if (m.deliveredAt) return "✓";
-    return "✓";
   };
 
   const handleDeleteActiveConversation = async () => {
     const partnerId = activeConversation?.user?.id;
     if (!partnerId) return;
 
-    const ok = window.confirm("Удалить диалог? Все сообщения будут удалены без восстановления.");
-    if (!ok) return;
+    const approved = await confirm({
+      title: "Удалить диалог?",
+      message: "Все сообщения в диалоге будут удалены без возможности восстановления.",
+      confirmLabel: "Удалить диалог",
+      cancelLabel: "Отмена",
+      tone: "danger",
+    });
+
+    if (!approved) return;
 
     try {
       await api.delete(`/api/messages/conversation/${partnerId}`);
-
-      setConversations((prev) => (prev || []).filter((c) => c?.user?.id !== partnerId));
+      setConversations((prev) => prev.filter((conversation) => conversation?.user?.id !== partnerId));
       setActiveConversation(null);
       setMessages([]);
       resetSearch();
-    } catch (e) {
-      console.error("Ошибка удаления диалога:", e);
-      alert(
-        e?.response?.status
-          ? `Не удалось удалить: ${e.response.status} ${e.response.data?.message || ""}`
-          : "Не удалось удалить диалог"
+    } catch (requestError) {
+      console.error("Ошибка удаления диалога:", requestError);
+      error(
+        requestError?.response?.data?.message ||
+          requestError?.response?.data?.error ||
+          "Не удалось удалить диалог"
       );
     }
   };
 
+  const getDeliveryState = (message) => {
+    if (message.senderId !== user?.id) return null;
+    if (message.readAt) return { icon: "done_all", className: "message-status-read" };
+    if (message.deliveredAt) return { icon: "done_all", className: "message-status-delivered" };
+    return { icon: "done", className: "message-status-sent" };
+  };
+
+  useEffect(() => {
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
+    fetchConversations();
+    window.dispatchEvent(new Event("unread:update"));
+  }, [navigate, user]);
+
+  useEffect(() => {
+    if (!activeConversation) return;
+
+    setMessages([]);
+    setHasMore(false);
+    setNextCursor(null);
+    resetSearch();
+    fetchMessages(activeConversation);
+  }, [activeConversation]);
+
+  useEffect(() => {
+    const organizer = consumeSelectedOrganizer();
+    if (organizer) {
+      handleNewConversation(organizer);
+    }
+  }, [conversations.length]);
+
+  useEffect(() => {
+    if (!searchOpen) return undefined;
+
+    window.setTimeout(() => searchInputRef.current?.focus(), 0);
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        resetSearch();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    const socket = createSocket();
+    socketRef.current = socket;
+
+    const onNewMessage = (message) => {
+      const currentUser = userRef.current;
+      const conversation = activeConversationRef.current;
+
+      fetchConversations();
+
+      if (!conversation?.user?.id || !currentUser?.id) return;
+
+      const partnerId = conversation.user.id;
+      const belongsToCurrentThread =
+        (message.senderId === partnerId && message.receiverId === currentUser.id) ||
+        (message.senderId === currentUser.id && message.receiverId === partnerId);
+
+      if (belongsToCurrentThread) {
+        addMessageIfNotExists(message);
+        window.setTimeout(scrollToBottom, 0);
+        socket.emit("conversation:read", { partnerId });
+        markConversationAsReadLocal(partnerId);
+      }
+    };
+
+    const onMessageSent = (message) => {
+      addMessageIfNotExists(message);
+      fetchConversations();
+      window.setTimeout(scrollToBottom, 0);
+    };
+
+    const onMessageDelivered = (payload) => {
+      if (payload?.messageId) {
+        updateMessageStatus(payload.messageId, { deliveredAt: payload.deliveredAt });
+      }
+    };
+
+    const onMessagesRead = (payload) => {
+      if (payload?.messageIds?.length) {
+        updateManyMessageStatus(payload.messageIds, { readAt: payload.readAt });
+      }
+    };
+
+    const onMessageError = (payload) => {
+      console.error("WS message:error", payload);
+      error(payload?.error || "Не удалось отправить сообщение");
+    };
+
+    socket.on("message:new", onNewMessage);
+    socket.on("message:sent", onMessageSent);
+    socket.on("message:delivered", onMessageDelivered);
+    socket.on("messages:read", onMessagesRead);
+    socket.on("message:error", onMessageError);
+
+    return () => {
+      socket.off("message:new", onNewMessage);
+      socket.off("message:sent", onMessageSent);
+      socket.off("message:delivered", onMessageDelivered);
+      socket.off("messages:read", onMessagesRead);
+      socket.off("message:error", onMessageError);
+      socket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const partnerId = activeConversation?.user?.id;
+    if (!partnerId || !user?.id) return;
+
+    const sendReadEvent = () => {
+      const socket = socketRef.current;
+      if (!socket?.connected) return false;
+
+      socket.emit("conversation:read", { partnerId });
+      markConversationAsReadLocal(partnerId);
+      return true;
+    };
+
+    if (!sendReadEvent()) {
+      window.setTimeout(sendReadEvent, 300);
+      window.setTimeout(sendReadEvent, 800);
+    }
+  }, [activeConversation, user?.id]);
+
+  if (!user) {
+    return null;
+  }
+
+  if (loading) {
+    return <div className="chat-loading">Загрузка чата...</div>;
+  }
+
   return (
-    <div className="chat-container">
-      <div className="chat-sidebar">
-        <div className="chat-header">
-          <h3>Сообщения</h3>
+    <div className="chat-shell">
+      <aside className="chat-sidebar">
+        <div className="chat-panel-head">
+          <div>
+            <p className="section-kicker">Сообщения</p>
+            <h2>Диалоги</h2>
+          </div>
         </div>
 
         <div className="conversations-list">
           {conversations.length === 0 ? (
-            <div className="no-conversations">
-              <p>Нет сообщений</p>
-            </div>
+            <EmptyState
+              icon="chat"
+              title="Диалогов пока нет"
+              description="Когда вы начнёте переписку с организатором или волонтёром, диалог появится здесь."
+            />
           ) : (
-            conversations.map((conv) => (
-              <div
-                key={conv.user.id}
+            conversations.map((conversation) => (
+              <button
+                key={conversation.user.id}
+                type="button"
                 className={`conversation-item ${
-                  activeConversation?.user?.id === conv.user.id ? "active" : ""
+                  activeConversation?.user?.id === conversation.user.id ? "active" : ""
                 }`}
-                onClick={() => handleSelectConversation(conv)}
-                role="button"
-                tabIndex={0}
+                onClick={() => handleSelectConversation(conversation)}
               >
-                <div className="conversation-avatar">{initials(conv.user)}</div>
+                <span className="conversation-avatar">{getInitials(conversation.user)}</span>
 
-                <div className="conversation-info">
-                  <div className="conversation-header">
-                    <span className="conversation-name">{displayName(conv.user)}</span>
-                    <span className="conversation-time">
-                      {conv?.lastMessage?.createdAt ? formatTime(conv.lastMessage.createdAt) : ""}
-                    </span>
-                  </div>
+                <span className="conversation-info">
+                  <span className="conversation-head">
+                    <strong>{formatPersonName(conversation.user, "Пользователь")}</strong>
+                    <span>{formatTime(conversation?.lastMessage?.createdAt)}</span>
+                  </span>
+                  <span className="conversation-preview">
+                    {conversation?.lastMessage?.text
+                      ? truncateText(conversation.lastMessage.text, 42)
+                      : "Сообщений пока нет"}
+                  </span>
+                </span>
 
-                  <div className="conversation-preview">
-                    <span className="message-preview">
-                      {conv?.lastMessage?.text
-                        ? conv.lastMessage.text.length > 30
-                          ? conv.lastMessage.text.substring(0, 30) + "..."
-                          : conv.lastMessage.text
-                        : ""}
-                    </span>
-                  </div>
-
-                  {conv.unreadCount > 0 && <span className="unread-badge">{conv.unreadCount}</span>}
-                </div>
-              </div>
+                {conversation.unreadCount > 0 ? (
+                  <span className="unread-badge">{conversation.unreadCount}</span>
+                ) : null}
+              </button>
             ))
           )}
         </div>
-      </div>
+      </aside>
 
-      <div className="chat-main">
+      <section className="chat-main">
         {activeConversation ? (
           <>
-            <div className="chat-header chat-header-row">
-              <div className="chat-partner-info">
-                <h4>{displayName(activeConversation.user)}</h4>
-
-                <div className="chat-role-row">
-                  <span className="user-role">{displayRole(activeConversation.user?.role)}</span>
-
-                  <button
-                    type="button"
-                    className="chat-search-btn"
-                    title="Поиск в диалоге"
-                    onClick={() => {
-                      const next = !searchOpen;
-                      setSearchOpen(next);
-                      if (next) setTimeout(() => searchInputRef.current?.focus(), 0);
-                    }}
-                  >
-                    🔍
-                  </button>
-                </div>
-
-                {searchOpen && (
-                  <div className="chat-search-bar">
-                    <input
-                      ref={searchInputRef}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyDown={onSearchKeyDown}
-                      placeholder="Поиск в диалоге…"
-                      className="chat-search-input"
-                    />
-
-                    <button
-                      type="button"
-                      className="chat-search-action"
-                      onClick={() => runSearch({ reset: true })}
-                      disabled={searchLoading || !searchQuery.trim()}
-                      title="Найти"
-                    >
-                      {searchLoading ? "..." : "Найти"}
-                    </button>
-
-                    <div className="chat-search-nav">
-                      <button type="button" onClick={() => goToHit(-1)} disabled={!searchHits.length}>
-                        ↑
-                      </button>
-                      <button type="button" onClick={() => goToHit(1)} disabled={!searchHits.length}>
-                        ↓
-                      </button>
-                      <span className="chat-search-count">
-                        {searchHits.length
-                          ? `${Math.min(searchIndex + 1, searchHits.length)}/${searchHits.length}`
-                          : "0/0"}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      className="chat-search-close"
-                      onClick={() => setSearchOpen(false)}
-                      title="Закрыть"
-                    >
-                      ✖
-                    </button>
-                  </div>
-                )}
+            <div className="chat-panel-head chat-panel-head-main">
+              <div>
+                <h2>{formatPersonName(activeConversation.user, "Пользователь")}</h2>
+                <p>{getRoleLabel(activeConversation.user?.role)}</p>
               </div>
 
-              <button
-                type="button"
-                className="chat-delete-btn"
-                onClick={handleDeleteActiveConversation}
-                title="Удалить диалог"
-              >
-                🗑️
-              </button>
+              <div className="chat-head-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    const nextValue = !searchOpen;
+                    setSearchOpen(nextValue);
+                    if (!nextValue) {
+                      resetSearch();
+                    }
+                  }}
+                >
+                  <Icon name="search" />
+                  <span>Поиск</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={handleDeleteActiveConversation}
+                >
+                  <Icon name="delete" />
+                  <span>Удалить диалог</span>
+                </button>
+              </div>
             </div>
 
-            <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
-              {hasMore && (
-                <div className="chat-load-more">
-                  {loadingMore ? "Загрузка..." : "Прокрутите вверх, чтобы загрузить еще"}
+            {searchOpen ? (
+              <div className="chat-search-bar">
+                <label className="chat-search-input-wrap">
+                  <Icon name="search" />
+                  <input
+                    ref={searchInputRef}
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    onKeyDown={handleSearchKeyDown}
+                    placeholder="Поиск по сообщениям"
+                    className="chat-search-input"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => runSearch({ reset: true })}
+                  disabled={searchLoading || !searchQuery.trim()}
+                >
+                  <Icon name="search" />
+                  <span>{searchLoading ? "Поиск..." : "Найти"}</span>
+                </button>
+
+                <div className="chat-search-nav">
+                  <button type="button" className="app-icon-button" onClick={() => goToHit(-1)}>
+                    <Icon name="keyboard_arrow_up" />
+                  </button>
+                  <button type="button" className="app-icon-button" onClick={() => goToHit(1)}>
+                    <Icon name="keyboard_arrow_down" />
+                  </button>
+                  <span>
+                    {searchHits.length
+                      ? `${Math.min(searchIndex + 1, searchHits.length)}/${searchHits.length}`
+                      : "0/0"}
+                  </span>
+                  <button type="button" className="app-icon-button" onClick={resetSearch}>
+                    <Icon name="close" />
+                  </button>
                 </div>
-              )}
+              </div>
+            ) : null}
 
-              {messages.length > 0 ? (
-                messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={`message ${message.senderId === user.id ? "sent" : "received"}`}
-                  >
+            <div className="messages-container" ref={messagesContainerRef} onScroll={handleScroll}>
+              {hasMore ? (
+                <div className="chat-load-more">
+                  {loadingMore
+                    ? "Загрузка истории..."
+                    : "Прокрутите выше, чтобы загрузить более ранние сообщения"}
+                </div>
+              ) : null}
+
+              {messages.length === 0 ? (
+                <EmptyState
+                  icon="forum"
+                  title="Сообщений пока нет"
+                  description="Начните диалог первым сообщением."
+                />
+              ) : (
+                messages.map((message) => {
+                  const deliveryState = getDeliveryState(message);
+
+                  return (
                     <div
-                      id={`msg-${message.id}`}
-                      className={`message-content ${highlightMessageId === message.id ? "msg-flash" : ""}`}
+                      key={message.id}
+                      className={`message-row ${message.senderId === user.id ? "sent" : "received"}`}
                     >
-                      <p>{highlightText(message.text, searchOpen ? searchQuery : "")}</p>
-
-                      <div className="message-meta">
-                        <span className="message-time">
-                          {message.createdAt ? formatTime(message.createdAt) : ""}
-                        </span>
-                        {message.senderId === user.id && (
-                          <span className="message-status">{getStatusIcon(message)}</span>
-                        )}
+                      <div
+                        id={`msg-${message.id}`}
+                        className={`message-bubble ${
+                          highlightMessageId === message.id ? "message-bubble-highlight" : ""
+                        }`}
+                      >
+                        <p>{highlightText(message.text, searchOpen ? searchQuery : "")}</p>
+                        <div className="message-meta">
+                          <span>{formatTime(message.createdAt)}</span>
+                          {deliveryState ? (
+                            <span className={`message-status ${deliveryState.className}`}>
+                              <Icon name={deliveryState.icon} />
+                            </span>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
-              ) : (
-                <div className="no-messages">
-                  <p>Нет сообщений</p>
-                </div>
+                  );
+                })
               )}
 
               <div ref={messagesEndRef} />
             </div>
 
             <form className="message-input-form" onSubmit={handleSendMessage}>
-              <input
-                type="text"
+              <textarea
+                rows={1}
                 value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Введите сообщение..."
+                onChange={(event) => setNewMessage(event.target.value)}
+                placeholder="Введите сообщение"
                 className="message-input"
               />
-              <button type="submit" className="send-button" disabled={!newMessage.trim()}>
-                Отправить
+              <button type="submit" className="btn btn-primary" disabled={!newMessage.trim()}>
+                <Icon name="send" />
+                <span>Отправить</span>
               </button>
             </form>
           </>
         ) : (
-          <div className="no-chat-selected">
-            <p>Выберите диалог для начала общения</p>
-            <p>Или нажмите “Написать организатору” на странице проекта</p>
+          <div className="chat-empty-state">
+            <EmptyState
+              icon="chat_bubble"
+              title="Выберите диалог"
+              description="Откройте существующий чат слева или напишите организатору со страницы проекта."
+            />
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

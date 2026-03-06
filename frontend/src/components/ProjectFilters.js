@@ -1,40 +1,43 @@
-import React, { useState } from 'react';
-import './ProjectFilters.css';
+import React, { useEffect, useState } from "react";
+
+import { PROJECT_TYPE_OPTIONS, PROJECT_STATUS_META } from "../utils/presentation";
+import Icon from "./ui/Icon";
+import "./ProjectFilters.css";
+
+const STATUS_OPTIONS = [
+  { value: "", label: "Все статусы" },
+  { value: "ACTIVE", label: PROJECT_STATUS_META.ACTIVE.label },
+  { value: "COMPLETED", label: PROJECT_STATUS_META.COMPLETED.label },
+  { value: "CANCELLED", label: PROJECT_STATUS_META.CANCELLED.label },
+];
 
 function ProjectFilters({ filters, onFiltersChange, onReset }) {
   const [localFilters, setLocalFilters] = useState({
-    search: filters.search || '',
-    projectType: filters.projectType || '',
-    location: filters.location || '',
-    dateFrom: filters.dateFrom || '',
-    dateTo: filters.dateTo || '',
-    status: filters.status || '' // Добавляем статус в фильтры
+    search: filters.search || "",
+    projectType: filters.projectType || "",
+    location: filters.location || "",
+    dateFrom: filters.dateFrom || "",
+    dateTo: filters.dateTo || "",
+    status: filters.status || "",
   });
-
   const [showFilters, setShowFilters] = useState(false);
 
-  const projectTypes = [
-    { value: 'ECOLOGY', label: '🌱 Экология' },
-    { value: 'ANIMAL_WELFARE', label: '🐾 Защита животных' },
-    { value: 'EDUCATION', label: '📚 Образование' },
-    { value: 'SOCIAL', label: '❤️ Социальная помощь' },
-    { value: 'CULTURAL', label: '🎨 Культура' },
-    { value: 'SPORTS', label: '⚽ Спорт' },
-    { value: 'MEDICAL', label: '🏥 Медицина' },
-    { value: 'OTHER', label: '🔧 Другое' }
-  ];
-
-  // Добавляем опции для статусов
-  const statusOptions = [
-    { value: '', label: 'Все статусы' },
-    { value: 'ACTIVE', label: '🔵 Активные' },
-    { value: 'COMPLETED', label: '✅ Завершенные' },
-    { value: 'CANCELLED', label: '❌ Отмененные' }
-  ];
+  useEffect(() => {
+    setLocalFilters({
+      search: filters.search || "",
+      projectType: filters.projectType || "",
+      location: filters.location || "",
+      dateFrom: filters.dateFrom || "",
+      dateTo: filters.dateTo || "",
+      status: filters.status || "",
+    });
+  }, [filters]);
 
   const handleFilterChange = (key, value) => {
-    const newFilters = { ...localFilters, [key]: value };
-    setLocalFilters(newFilters);
+    setLocalFilters((prev) => ({
+      ...prev,
+      [key]: value,
+    }));
   };
 
   const handleApplyFilters = () => {
@@ -42,15 +45,14 @@ function ProjectFilters({ filters, onFiltersChange, onReset }) {
   };
 
   const handleReset = () => {
-    const resetFilters = {
-      search: '',
-      projectType: '',
-      location: '',
-      dateFrom: '',
-      dateTo: '',
-      status: '' // Добавляем сброс статуса
-    };
-    setLocalFilters(resetFilters);
+    setLocalFilters({
+      search: "",
+      projectType: "",
+      location: "",
+      dateFrom: "",
+      dateTo: "",
+      status: "",
+    });
     onReset();
   };
 
@@ -60,39 +62,34 @@ function ProjectFilters({ filters, onFiltersChange, onReset }) {
         <div className="search-box">
           <input
             type="text"
-            placeholder="Поиск по названию или описанию..."
+            placeholder="Поиск по названию и описанию"
             value={localFilters.search}
-            onChange={(e) => handleFilterChange('search', e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleApplyFilters()}
+            onChange={(event) => handleFilterChange("search", event.target.value)}
+            onKeyDown={(event) => event.key === "Enter" && handleApplyFilters()}
           />
-          <button
-            className="search-btn"
-            onClick={handleApplyFilters}
-          >
-            🔍
+          <button className="search-btn" type="button" onClick={handleApplyFilters} aria-label="Применить поиск">
+            <Icon name="search" />
           </button>
-        </div>       
-        
-        <button
-          className="toggle-filters-btn"
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          {showFilters ? '▲ Скрыть фильтры' : '▼ Расширенные фильтры'}
+        </div>
+
+        <button className="toggle-filters-btn" type="button" onClick={() => setShowFilters((prev) => !prev)}>
+          <Icon name={showFilters ? "expand_less" : "tune"} />
+          <span>{showFilters ? "Скрыть расширенные фильтры" : "Открыть расширенные фильтры"}</span>
         </button>
       </div>
 
-      {showFilters && (
+      {showFilters ? (
         <div className="filters-panel">
           <div className="filters-grid">
-            {/* Добавляем фильтр по статусу */}
             <div className="filter-group">
-              <label>Статус:</label>
+              <label htmlFor="filter-status">Статус</label>
               <select
+                id="filter-status"
                 value={localFilters.status}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
+                onChange={(event) => handleFilterChange("status", event.target.value)}
               >
-                {statusOptions.map(option => (
-                  <option key={option.value} value={option.value}>
+                {STATUS_OPTIONS.map((option) => (
+                  <option key={option.value || "all"} value={option.value}>
                     {option.label}
                   </option>
                 ))}
@@ -100,13 +97,14 @@ function ProjectFilters({ filters, onFiltersChange, onReset }) {
             </div>
 
             <div className="filter-group">
-              <label>Тип проекта:</label>
+              <label htmlFor="filter-project-type">Тип проекта</label>
               <select
+                id="filter-project-type"
                 value={localFilters.projectType}
-                onChange={(e) => handleFilterChange('projectType', e.target.value)}
+                onChange={(event) => handleFilterChange("projectType", event.target.value)}
               >
                 <option value="">Все типы</option>
-                {projectTypes.map(type => (
+                {PROJECT_TYPE_OPTIONS.map((type) => (
                   <option key={type.value} value={type.value}>
                     {type.label}
                   </option>
@@ -115,50 +113,47 @@ function ProjectFilters({ filters, onFiltersChange, onReset }) {
             </div>
 
             <div className="filter-group">
-              <label>Местоположение:</label>
+              <label htmlFor="filter-location">Локация</label>
               <input
+                id="filter-location"
                 type="text"
-                placeholder="Город или адрес..."
+                placeholder="Город или адрес"
                 value={localFilters.location}
-                onChange={(e) => handleFilterChange('location', e.target.value)}
+                onChange={(event) => handleFilterChange("location", event.target.value)}
               />
             </div>
 
             <div className="filter-group">
-              <label>Дата с:</label>
+              <label htmlFor="filter-date-from">Дата с</label>
               <input
+                id="filter-date-from"
                 type="date"
                 value={localFilters.dateFrom}
-                onChange={(e) => handleFilterChange('dateFrom', e.target.value)}
+                onChange={(event) => handleFilterChange("dateFrom", event.target.value)}
               />
             </div>
 
             <div className="filter-group">
-              <label>Дата по:</label>
+              <label htmlFor="filter-date-to">Дата по</label>
               <input
+                id="filter-date-to"
                 type="date"
                 value={localFilters.dateTo}
-                onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+                onChange={(event) => handleFilterChange("dateTo", event.target.value)}
               />
             </div>
           </div>
 
           <div className="filter-actions">
-            <button
-              className="btn btn-primary"
-              onClick={handleApplyFilters}
-            >
+            <button className="btn btn-primary" type="button" onClick={handleApplyFilters}>
               Применить фильтры
             </button>
-            <button
-              className="btn btn-secondary"
-              onClick={handleReset}
-            >
+            <button className="btn btn-secondary" type="button" onClick={handleReset}>
               Сбросить
             </button>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

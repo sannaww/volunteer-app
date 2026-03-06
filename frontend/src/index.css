@@ -1,13 +1,61 @@
+:root {
+  --bg-page: #f4efe8;
+  --surface-base: rgba(255, 252, 248, 0.78);
+  --surface-elevated: rgba(255, 255, 255, 0.94);
+  --surface-soft: rgba(237, 231, 221, 0.72);
+  --text-primary: #142132;
+  --text-secondary: #4d5d71;
+  --text-muted: #768396;
+  --border-subtle: rgba(20, 33, 50, 0.08);
+  --border-strong: rgba(20, 33, 50, 0.16);
+  --accent-primary: #466d9d;
+  --accent-primary-strong: #274a73;
+  --accent-success: #3d7651;
+  --accent-danger: #ac3b2f;
+  --accent-warning: #986934;
+  --shadow-soft: 0 14px 36px rgba(17, 29, 44, 0.08);
+  --shadow-strong: 0 24px 60px rgba(17, 29, 44, 0.12);
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --content-width: 1280px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  min-height: 100vh;
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at top left, rgba(221, 212, 196, 0.75), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(199, 215, 230, 0.7), transparent 28%),
+    linear-gradient(180deg, var(--bg-page) 0%, #f8f4ee 100%);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+#root {
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 }

@@ -1,142 +1,156 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import api from "../api/client";
-import './DraftProjects.css';
-import { useNavigate } from 'react-router-dom';
+import { formatDate } from "../utils/formatters";
+import EmptyState from "./ui/EmptyState";
+import Icon from "./ui/Icon";
+import { useFeedback } from "./ui/FeedbackProvider";
+import "./DraftProjects.css";
 
 function DraftProjects({ user }) {
   const [drafts, setDrafts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      fetchDrafts();
-    } else {
-      setLoading(false);
-    }
-  }, [user]);
+  const navigate = useNavigate();
+  const { confirm, error, success } = useFeedback();
 
   const fetchDrafts = async () => {
-  try {
-    const response = await api.get("/api/projects?status=DRAFT");
-    setDrafts(response.data);
-  } catch (error) {
-    console.error("Ошибка при загрузке черновиков:", error);
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      const response = await api.get("/api/projects?status=DRAFT");
+      setDrafts(Array.isArray(response.data) ? response.data : []);
+    } catch (requestError) {
+      console.error("Ошибка при загрузке черновиков:", requestError);
+      error("Не удалось загрузить черновики");
+      setDrafts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    fetchDrafts();
+  }, [user?.id]);
 
   const handlePublish = async (projectId) => {
-  try {
-    await api.put(
-      `/api/projects/${projectId}`,
-      { status: 'ACTIVE' }
-    );
-    alert('Проект опубликован!');
-    fetchDrafts();
-  } catch (error) {
-    console.error('Ошибка при публикации проекта:', error);
-    alert('Ошибка при публикации проекта');
-  }
-};
-
-  const navigate = useNavigate();
-  const handleEdit = (project) => {
-    window.location.href = `/edit-project/${project.id}`;
-    navigate(`/edit-project/${project.id}`);
+    try {
+      await api.put(`/api/projects/${projectId}`, { status: "ACTIVE" });
+      success("Черновик отправлен на публикацию.");
+      await fetchDrafts();
+    } catch (requestError) {
+      console.error("Ошибка при публикации проекта:", requestError);
+      error("Не удалось отправить проект на публикацию");
+    }
   };
 
   const handleDelete = async (projectId) => {
-  if (!window.confirm('Вы уверены, что хотите удалить этот черновик?')) {
-    return;
-  }
+    const approved = await confirm({
+      title: "Удалить черновик?",
+      message: "Черновик будет удалён без возможности восстановления.",
+      confirmLabel: "Удалить",
+      cancelLabel: "Оставить",
+      tone: "danger",
+    });
 
-  try {
-    await api.delete(`/api/projects/${projectId}`);
-    alert('Черновик удален!');
-    fetchDrafts();
-  } catch (error) {
-    console.error('Ошибка при удалении черновика:', error);
-    alert('Ошибка при удалении черновика');
-  }
-};
+    if (!approved) return;
 
-  // Проверка пользователя после хуков
+    try {
+      await api.delete(`/api/projects/${projectId}`);
+      success("Черновик удалён.");
+      await fetchDrafts();
+    } catch (requestError) {
+      console.error("Ошибка при удалении черновика:", requestError);
+      error("Не удалось удалить черновик");
+    }
+  };
+
   if (!user) {
-    return <div className="loading">Загрузка пользователя...</div>;
+    return <div className="loading">Загружаем пользователя...</div>;
   }
 
   if (loading) {
-    return <div className="loading">Загрузка черновиков...</div>;
+    return <div className="loading">Загружаем черновики...</div>;
   }
 
   return (
     <div className="draft-projects">
       <div className="drafts-header">
-        <h2>Мои черновики</h2>
-        <p>Здесь отображаются проекты, которые еще не опубликованы</p>
+        <div>
+          <p className="section-kicker">Организация</p>
+          <h2>Черновики</h2>
+          <p>Проекты, которые ещё не отправлены на модерацию и видны только вам.</p>
+        </div>
+
+        <button className="btn btn-secondary" type="button" onClick={fetchDrafts}>
+          <Icon name="refresh" />
+          <span>Обновить</span>
+        </button>
       </div>
 
       {drafts.length === 0 ? (
-        <div className="no-drafts">
-          <h3>Черновиков нет</h3>
-          <p>У вас пока нет сохраненных черновиков проектов.</p>
-          <button 
-            className="btn btn-primary"
-            onClick={() => window.location.href = '/create-project'}
-          >
-            Создать проект
-          </button>
-        </div>
+        <EmptyState
+          icon="draft"
+          title="Черновиков пока нет"
+          description="Создайте новый проект или вернитесь позже, когда появятся сохранённые заготовки."
+          action={
+            <button className="btn btn-primary" type="button" onClick={() => navigate("/create-project")}>
+              <Icon name="add_circle" />
+              <span>Создать проект</span>
+            </button>
+          }
+        />
       ) : (
         <div className="drafts-list">
-          {drafts.map(project => (
-            <div key={project.id} className="draft-card">
+          {drafts.map((project) => (
+            <article key={project.id} className="draft-card">
               <div className="draft-content">
-                <h3>{project.title}</h3>
+                <div className="draft-card-top">
+                  <h3>{project.title}</h3>
+                  <span className="draft-card-badge">Черновик</span>
+                </div>
+
                 <p className="draft-description">{project.description}</p>
-                
+
                 <div className="draft-details">
                   <div className="detail-item">
-                    <strong>Тип:</strong>
-                    <span>{project.projectType || 'Не указан'}</span>
+                    <strong>Тип</strong>
+                    <span>{project.projectType || "Не указан"}</span>
                   </div>
                   <div className="detail-item">
-                    <strong>Местоположение:</strong>
-                    <span>{project.location || 'Не указано'}</span>
+                    <strong>Локация</strong>
+                    <span>{project.location || "Не указана"}</span>
                   </div>
                   <div className="detail-item">
-                    <strong>Нужно волонтеров:</strong>
+                    <strong>Волонтёры</strong>
                     <span>{project.volunteersRequired || 1}</span>
                   </div>
                   <div className="detail-item">
-                    <strong>Дата создания:</strong>
-                    <span>{new Date(project.createdAt).toLocaleDateString()}</span>
+                    <strong>Создан</strong>
+                    <span>{formatDate(project.createdAt)}</span>
                   </div>
                 </div>
               </div>
 
               <div className="draft-actions">
-                <button
-                  className="btn btn-success"
-                  onClick={() => handlePublish(project.id)}
-                >
-                  Опубликовать
+                <button className="btn btn-primary" type="button" onClick={() => handlePublish(project.id)}>
+                  <Icon name="publish" />
+                  <span>Отправить на публикацию</span>
                 </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={() => handleEdit(project)}
-                >
-                  Редактировать
+                <button className="btn btn-secondary" type="button" onClick={() => navigate(`/edit-project/${project.id}`)}>
+                  <Icon name="edit" />
+                  <span>Редактировать</span>
                 </button>
-                <button
-                  className="btn btn-danger"
-                  onClick={() => handleDelete(project.id)}
-                >
-                  Удалить
+                <button className="btn btn-danger" type="button" onClick={() => handleDelete(project.id)}>
+                  <Icon name="delete" />
+                  <span>Удалить</span>
                 </button>
               </div>
-            </div>
+            </article>
           ))}
         </div>
       )}

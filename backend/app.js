@@ -231,13 +231,16 @@ app.use(
 );
 
 // ✅ Proxy → Socket.IO (applications-service 5003)
-app.use(
-  "/socket.io",
-  createProxyMiddleware({
-    target: APPLICATIONS_SERVICE_URL,
-    changeOrigin: true,
-    ws: true, // 🔥 вот это включает проксирование WebSocket upgrade
-  })
-);
+// Важно: для Express mount-path "/socket.io" обрезается, поэтому восстанавливаем originalUrl.
+const socketIoProxy = createProxyMiddleware({
+  target: APPLICATIONS_SERVICE_URL,
+  changeOrigin: true,
+  ws: true,
+  pathRewrite: (path, req) => req.originalUrl,
+});
+
+app.use("/socket.io", socketIoProxy);
+
+app.socketIoProxy = socketIoProxy;
 
 module.exports = app;

@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+
 import api from "../api/client";
+import { useFeedback } from "./ui/FeedbackProvider";
+import { consumePrefillLoginEmail, setSessionToken, setSessionUser } from "../utils/authSession";
 import "./Auth.css";
 
 function Login({ onLogin }) {
@@ -8,42 +11,38 @@ function Login({ onLogin }) {
     email: "",
     password: "",
   });
-
   const [loading, setLoading] = useState(false);
+
+  const passwordRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { error } = useFeedback();
   const from = location.state?.from || "/";
 
-  const passwordRef = useRef(null); // ✅ ссылка на поле пароля
-
-  // ✅ автозаполнение email + фокус на пароль
   useEffect(() => {
-    const savedEmail = sessionStorage.getItem("prefillLoginEmail");
+    const savedEmail = consumePrefillLoginEmail();
+    if (!savedEmail) return;
 
-    if (savedEmail) {
-      setFormData((prev) => ({
-        ...prev,
-        email: savedEmail,
-      }));
-
-      sessionStorage.removeItem("prefillLoginEmail");
-
-      // даём React обновить DOM, затем ставим фокус
-      setTimeout(() => {
-        passwordRef.current?.focus();
-      }, 0);
-    }
-  }, []);
-
-  const handleChange = (e) => {
     setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      email: savedEmail,
+    }));
+
+    window.setTimeout(() => {
+      passwordRef.current?.focus();
+    }, 0);
+  }, []);
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     if (loading) return;
 
     setLoading(true);
@@ -53,18 +52,18 @@ function Login({ onLogin }) {
         password: formData.password,
       });
 
-      sessionStorage.setItem("token", response.data.token);
-      sessionStorage.setItem("user", JSON.stringify(response.data.user));
+      setSessionToken(response.data.token);
+      setSessionUser(response.data.user);
 
-      if (onLogin) onLogin(response.data.user);
-
+      onLogin?.(response.data.user);
       navigate(from, { replace: true });
-    } catch (error) {
-      const msg =
-        error.response?.data?.message ||
-        error.response?.data?.error ||
-        "Ошибка при входе";
-      alert(msg);
+    } catch (requestError) {
+      const message =
+        requestError.response?.data?.message ||
+        requestError.response?.data?.error ||
+        "Не удалось выполнить вход";
+
+      error(message, "Ошибка авторизации");
     } finally {
       setLoading(false);
     }
@@ -76,8 +75,9 @@ function Login({ onLogin }) {
         <h2>Вход</h2>
 
         <div className="form-group">
-          <label>Email:</label>
+          <label htmlFor="login-email">Email</label>
           <input
+            id="login-email"
             type="email"
             name="email"
             value={formData.email}
@@ -89,8 +89,10 @@ function Login({ onLogin }) {
         </div>
 
         <div className="form-group">
-          <label>Пароль:</label>
+          <label htmlFor="login-password">Пароль</label>
           <input
+            id="login-password"
+            ref={passwordRef}
             type="password"
             name="password"
             value={formData.password}
@@ -98,12 +100,11 @@ function Login({ onLogin }) {
             required
             disabled={loading}
             autoComplete="current-password"
-            ref={passwordRef}  // ✅ сюда вешаем ref
           />
         </div>
 
         <button type="submit" className="auth-btn" disabled={loading}>
-          {loading ? "Входим..." : "Войти"}
+          {loading ? "Выполняем вход..." : "Войти"}
         </button>
 
         <p className="auth-link">

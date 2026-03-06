@@ -1,6 +1,8 @@
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+
 import api from "../api/client";
+import { setPrefillLoginEmail } from "../utils/authSession";
 import "./Auth.css";
 
 function Register() {
@@ -12,32 +14,37 @@ function Register() {
     role: "volunteer",
     contactInfo: "",
   });
-
   const [message, setMessage] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
-  const handleChange = (e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
-  const getNiceError = (err) => {
-    const status = err?.response?.status;
-    const msg = err?.response?.data?.message || err?.response?.data?.error || "";
+  const getNiceError = (requestError) => {
+    const status = requestError?.response?.status;
+    const message =
+      requestError?.response?.data?.message ||
+      requestError?.response?.data?.error ||
+      "";
 
-    // корректное сообщение для повторной регистрации
-    if (status === 409) return "Пользователь с такими данными уже есть";
-    if (String(msg).toLowerCase().includes("уже существует")) {
-      return "Пользователь с такими данными уже есть";
+    if (status === 409) return "Пользователь с такими данными уже существует";
+    if (String(message).toLowerCase().includes("уже существует")) {
+      return "Пользователь с такими данными уже существует";
     }
 
-    return msg || "Ошибка регистрации";
+    return message || "Ошибка регистрации";
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     if (loading) return;
 
     setMessage("");
@@ -50,25 +57,19 @@ function Register() {
         lastName: formData.lastName.trim(),
         email: formData.email.trim(),
         password: formData.password,
-        role: formData.role, // volunteer | organizer
+        role: formData.role,
         contactInfo: formData.contactInfo.trim() || null,
       };
 
       await api.post("/api/auth/register", payload);
 
       setIsSuccess(true);
-      setMessage("Регистрация успешна! Перенаправляем на вход...");
-      // ✅ сохраняем, чтобы Login подтянул поля
-      sessionStorage.setItem("prefillLoginEmail", payload.email);
-
-      // ✅ Вариант: на страницу "Войти"
+      setMessage("Регистрация завершена. Переходим ко входу.");
+      setPrefillLoginEmail(payload.email);
       navigate("/login");
-
-      // ✅ Если хочешь на главную — вместо этого:
-      // navigate("/");
-    } catch (err) {
+    } catch (requestError) {
       setIsSuccess(false);
-      setMessage(getNiceError(err));
+      setMessage(getNiceError(requestError));
     } finally {
       setLoading(false);
     }
@@ -79,15 +80,12 @@ function Register() {
       <form className="auth-form" onSubmit={handleSubmit}>
         <h2>Регистрация</h2>
 
-        {message && (
-          <div className={`message ${isSuccess ? "success" : "error"}`}>
-            {message}
-          </div>
-        )}
+        {message ? <div className={`message ${isSuccess ? "success" : "error"}`}>{message}</div> : null}
 
         <div className="form-group">
-          <label>Имя:</label>
+          <label htmlFor="register-first-name">Имя</label>
           <input
+            id="register-first-name"
             type="text"
             name="firstName"
             value={formData.firstName}
@@ -98,8 +96,9 @@ function Register() {
         </div>
 
         <div className="form-group">
-          <label>Фамилия:</label>
+          <label htmlFor="register-last-name">Фамилия</label>
           <input
+            id="register-last-name"
             type="text"
             name="lastName"
             value={formData.lastName}
@@ -110,8 +109,9 @@ function Register() {
         </div>
 
         <div className="form-group">
-          <label>Email:</label>
+          <label htmlFor="register-email">Email</label>
           <input
+            id="register-email"
             type="email"
             name="email"
             value={formData.email}
@@ -123,8 +123,9 @@ function Register() {
         </div>
 
         <div className="form-group">
-          <label>Пароль:</label>
+          <label htmlFor="register-password">Пароль</label>
           <input
+            id="register-password"
             type="password"
             name="password"
             value={formData.password}
@@ -137,8 +138,9 @@ function Register() {
         </div>
 
         <div className="form-group">
-          <label>Контакт (необязательно):</label>
+          <label htmlFor="register-contact-info">Контакты</label>
           <input
+            id="register-contact-info"
             type="text"
             name="contactInfo"
             value={formData.contactInfo}
@@ -149,20 +151,15 @@ function Register() {
         </div>
 
         <div className="form-group">
-          <label>Роль:</label>
-          <select
-            name="role"
-            value={formData.role}
-            onChange={handleChange}
-            disabled={loading}
-          >
+          <label htmlFor="register-role">Роль</label>
+          <select id="register-role" name="role" value={formData.role} onChange={handleChange} disabled={loading}>
             <option value="volunteer">Волонтер</option>
             <option value="organizer">Организатор</option>
           </select>
         </div>
 
         <button type="submit" className="auth-btn" disabled={loading}>
-          {loading ? "Регистрация..." : "Зарегистрироваться"}
+          {loading ? "Создаем аккаунт..." : "Зарегистрироваться"}
         </button>
 
         <p className="auth-link">

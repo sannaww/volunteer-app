@@ -1,254 +1,178 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import api from "../api/client";
+import {
+  clearSession,
+  getProfileActiveTab,
+  setProfileActiveTab,
+} from "../utils/authSession";
+import { formatDate, formatPhoneDisplay } from "../utils/formatters";
+import { getRoleLabel } from "../utils/presentation";
+import AdminPanel from "./AdminPanel";
+import DraftProjects from "./DraftProjects";
+import OrganizerMyProjects from "./OrganizerMyProjects";
+import OrganizerStats from "./OrganizerStats";
+import ProjectHistory from "./ProjectHistory";
+import Icon from "./ui/Icon";
+import { useFeedback } from "./ui/FeedbackProvider";
 import "./Profile.css";
 
-import OrganizerStats from "./OrganizerStats";
-import DraftProjects from "./DraftProjects";
-import ProjectHistory from "./ProjectHistory";
-import AdminDashboard from "./AdminDashboard";
-import OrganizerMyProjects from "./OrganizerMyProjects";
+const ROLE_TABS = {
+  volunteer: [
+    { id: "profile", label: "Профиль", icon: "badge" },
+    { id: "history", label: "История", icon: "history" },
+  ],
+  organizer: [
+    { id: "profile", label: "Профиль", icon: "badge" },
+    { id: "stats", label: "Статистика", icon: "bar_chart" },
+    { id: "myProjects", label: "Мои проекты", icon: "folder_open" },
+    { id: "drafts", label: "Черновики", icon: "draft" },
+  ],
+  admin: [
+    { id: "profile", label: "Профиль", icon: "badge" },
+    { id: "admin", label: "Администрирование", icon: "shield" },
+  ],
+};
+
+function getFallbackProfile(user) {
+  return {
+    firstName: user?.firstName || "",
+    lastName: user?.lastName || "",
+    email: user?.email || "",
+    role: user?.role || "",
+    points: user?.points ?? 0,
+    phone: user?.phone || "",
+    skills: user?.skills || "",
+    interests: user?.interests || "",
+    bio: user?.bio || "",
+    createdAt: user?.createdAt || "",
+  };
+}
 
 function Profile({ user, onUserUpdate }) {
   const [activeTab, setActiveTab] = useState("profile");
-
   const [profile, setProfile] = useState(null);
-  const [participationHistory, setParticipationHistory] = useState([]); // (можно оставить, даже если история теперь через ProjectHistory)
-  const [loading, setLoading] = useState(false);
-
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [formData, setFormData] = useState({});
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    skills: "",
+    interests: "",
+    bio: "",
+  });
 
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const navigate = useNavigate();
+  const { confirm, error, success } = useFeedback();
 
-  // Таб: восстановление + сохранение (убирает "мигание")
-  useEffect(() => {
-    if (!user?.role) return;
-
-    const key = `profileActiveTab:${user.role}`;
-    const saved = sessionStorage.getItem(key);
-
-    const allowedTabs =
-      user.role === "organizer"
-        ? ["profile", "stats", "myProjects", "drafts"]
-        : user.role === "volunteer"
-        ? ["profile", "history"]
-        : user.role === "admin"
-        ? ["profile", "admin"]
-        : ["profile"];
-
-    if (saved && allowedTabs.includes(saved)) {
-      setActiveTab(saved);
-    } else {
-      setActiveTab("profile");
-      sessionStorage.setItem(key, "profile");
-    }
-  }, [user?.role]);
+  const tabs = useMemo(() => ROLE_TABS[user?.role] || ROLE_TABS.volunteer, [user?.role]);
 
   useEffect(() => {
     if (!user?.role) return;
-    const key = `profileActiveTab:${user.role}`;
-    sessionStorage.setItem(key, activeTab);
+
+    const allowedTabs = tabs.map((tab) => tab.id);
+    const savedTab = getProfileActiveTab(user.role);
+    const nextTab = savedTab && allowedTabs.includes(savedTab) ? savedTab : "profile";
+    setActiveTab(nextTab);
+  }, [tabs, user?.role]);
+
+  useEffect(() => {
+    if (!user?.role || !activeTab) return;
+    setProfileActiveTab(user.role, activeTab);
   }, [activeTab, user?.role]);
 
-  // Load profile from server
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!user) return;
+    const fetchProfile = async () => {
+      if (!user) {
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
 
       setLoading(true);
+
       try {
-        const token = sessionStorage.getItem("token");
-        if (!token) return;
-
         const response = await api.get("/api/auth/me");
-
-        const userData = response.data;
-
-        const userProfile = {
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        email: userData.email,
-        role: userData.role,
-        points: typeof userData.points === "number" ? userData.points : (user?.points ?? 0), // ✅
-        phone: userData.phone || "",
-        skills: userData.skills || "",
-        interests: userData.interests || "",
-        bio: userData.bio || "",
-        createdAt: userData.createdAt,
+        const nextProfile = {
+          firstName: response.data?.firstName || "",
+          lastName: response.data?.lastName || "",
+          email: response.data?.email || "",
+          role: response.data?.role || user.role,
+          points:
+            typeof response.data?.points === "number"
+              ? response.data.points
+              : user.points ?? 0,
+          phone: response.data?.phone || "",
+          skills: response.data?.skills || "",
+          interests: response.data?.interests || "",
+          bio: response.data?.bio || "",
+          createdAt: response.data?.createdAt || user.createdAt || "",
         };
 
-        setProfile(userProfile);
+        setProfile(nextProfile);
         setFormData({
-          firstName: userProfile.firstName || "",
-          lastName: userProfile.lastName || "",
-          phone: userProfile.phone || "",
-          skills: userProfile.skills || "",
-          interests: userProfile.interests || "",
-          bio: userProfile.bio || "",
+          firstName: nextProfile.firstName,
+          lastName: nextProfile.lastName,
+          phone: nextProfile.phone,
+          skills: nextProfile.skills,
+          interests: nextProfile.interests,
+          bio: nextProfile.bio,
         });
 
-        // ✅ Обновляем user в App.js (Navbar и роли синхронизируются)
-        if (onUserUpdate) {
-          onUserUpdate({
-            ...user,
-            ...userData,
-          });
-        }
-      } catch (error) {
-        console.error("Ошибка при загрузке профиля:", error);
-
-        // fallback: local state из user
-        const userProfile = {
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          role: user.role,
-          points: user.points ?? 0,
-          phone: user.phone || "",
-          skills: user.skills || "",
-          interests: user.interests || "",
-          bio: user.bio || "",
-          createdAt: user.createdAt || new Date().toISOString(),
-        };
-
-        setProfile(userProfile);
+        onUserUpdate?.({
+          ...user,
+          ...response.data,
+        });
+      } catch (requestError) {
+        console.error("Ошибка при загрузке профиля:", requestError);
+        const fallbackProfile = getFallbackProfile(user);
+        setProfile(fallbackProfile);
         setFormData({
-          firstName: userProfile.firstName || "",
-          lastName: userProfile.lastName || "",
-          phone: userProfile.phone || "",
-          skills: userProfile.skills || "",
-          interests: userProfile.interests || "",
-          bio: userProfile.bio || "",
+          firstName: fallbackProfile.firstName,
+          lastName: fallbackProfile.lastName,
+          phone: fallbackProfile.phone,
+          skills: fallbackProfile.skills,
+          interests: fallbackProfile.interests,
+          bio: fallbackProfile.bio,
         });
       } finally {
         setLoading(false);
       }
     };
 
-    fetchUserProfile();
-    // ✅ ВАЖНО: зависимость только от user.id, чтобы не было "перезапусков" из-за изменения объекта user
+    fetchProfile();
   }, [user?.id]);
 
-  // Load participation history (если где-то используется)
-  useEffect(() => {
-    if (user && activeTab === "history") {
-      fetchParticipationHistory();
-    }
-    // ✅ не зависим от всего user-объекта
-  }, [activeTab, user?.id]);
+  const handleInputChange = (event) => {
+    const { name, value } = event.target;
 
-  const fetchParticipationHistory = async () => {
-    try {
-      const token = sessionStorage.getItem("token");
-      if (!token) return;
-
-      const response = await api.get("/api/profile/participation-history");
-
-      setParticipationHistory(response.data);
-    } catch (error) {
-      console.error("Ошибка при загрузке истории участия:", error);
-    }
-  };
-
-  // Save profile
-  const handleSaveProfile = async (e) => {
-    e.preventDefault();
-
-    try {
-      const token = sessionStorage.getItem("token");
-      if (!token) {
-        alert("Требуется авторизация");
-        return;
-      }
-
-      const response = await api.put("/api/profile", {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone,
-        skills: formData.skills,
-        interests: formData.interests,
-        bio: formData.bio,
-      });
-
-      const updatedFields = response.data;
-
-      setProfile((prev) => ({
-        ...prev,
-        ...updatedFields,
-      }));
-
-      setFormData((prev) => ({
-        ...prev,
-        ...updatedFields,
-      }));
-
-      if (onUserUpdate) {
-        onUserUpdate({
-          ...user,
-          ...updatedFields,
-        });
-      }
-
-      setEditing(false);
-      alert("Профиль успешно обновлен!");
-    } catch (error) {
-      console.error("❌ Ошибка при обновлении профиля:", error);
-      alert(
-        error.response?.data?.error ||
-          error.response?.data?.message ||
-          "Ошибка при обновлении профиля"
-      );
-    }
-  };
-
-  // Input change
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-
-    // only phone formatting
     if (name === "phone") {
-      let cleanedValue = value.replace(/[^\d+]/g, "");
+      let nextPhone = value.replace(/[^\d+]/g, "");
 
-      if (cleanedValue.startsWith("8")) {
-        cleanedValue = "+7" + cleanedValue.substring(1);
-      } else if (cleanedValue.startsWith("7") && !cleanedValue.startsWith("+7")) {
-        cleanedValue = "+7" + cleanedValue.substring(1);
-      } else if (!cleanedValue.startsWith("+") && cleanedValue.length > 0) {
-        cleanedValue = "+7" + cleanedValue;
-      }
-
-      if (cleanedValue.length > 12) {
-        cleanedValue = cleanedValue.substring(0, 12);
+      if (nextPhone.startsWith("8")) {
+        nextPhone = `+7${nextPhone.slice(1)}`;
+      } else if (nextPhone.startsWith("7") && !nextPhone.startsWith("+7")) {
+        nextPhone = `+7${nextPhone.slice(1)}`;
+      } else if (nextPhone && !nextPhone.startsWith("+")) {
+        nextPhone = `+7${nextPhone}`;
       }
 
       setFormData((prev) => ({
         ...prev,
-        [name]: cleanedValue,
+        [name]: nextPhone.slice(0, 12),
       }));
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }));
+      return;
     }
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
-  // Helpers
-  const formatPhoneDisplay = (phone) => {
-    if (!phone) return "Не указан";
-
-    const cleaned = phone.replace(/\D/g, "");
-
-    if (cleaned.length === 11 && (cleaned.startsWith("7") || cleaned.startsWith("8"))) {
-      const match = cleaned.match(/^[78]?(\d{3})(\d{3})(\d{2})(\d{2})$/);
-      if (match) {
-        return `+7 (${match[1]}) ${match[2]}-${match[3]}-${match[4]}`;
-      }
-    }
-    return phone;
-  };
-
-  const handleEditStart = () => {
+  const handleStartEditing = () => {
     setEditing(true);
     setFormData({
       firstName: profile?.firstName || "",
@@ -260,416 +184,351 @@ function Profile({ user, onUserUpdate }) {
     });
   };
 
-  // Delete account
-  const handleDeleteAccount = async () => {
-    if (
-      !window.confirm(
-        "Вы уверены, что хотите удалить аккаунт? Это действие нельзя отменить. Все ваши проекты и заявки будут удалены."
-      )
-    ) {
-      return;
+  const handleCancelEditing = () => {
+    setEditing(false);
+    setFormData({
+      firstName: profile?.firstName || "",
+      lastName: profile?.lastName || "",
+      phone: profile?.phone || "",
+      skills: profile?.skills || "",
+      interests: profile?.interests || "",
+      bio: profile?.bio || "",
+    });
+  };
+
+  const handleSaveProfile = async (event) => {
+    event.preventDefault();
+
+    try {
+      const response = await api.put("/api/profile", {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phone: formData.phone,
+        skills: formData.skills,
+        interests: formData.interests,
+        bio: formData.bio,
+      });
+
+      const updatedProfile = {
+        ...profile,
+        ...response.data,
+      };
+
+      setProfile(updatedProfile);
+      setEditing(false);
+      success("Профиль обновлён.");
+
+      onUserUpdate?.({
+        ...user,
+        ...response.data,
+      });
+    } catch (requestError) {
+      console.error("Ошибка обновления профиля:", requestError);
+      error(
+        requestError.response?.data?.error ||
+          requestError.response?.data?.message ||
+          "Не удалось обновить профиль"
+      );
     }
+  };
+
+  const handleDeleteAccount = async () => {
+    const approved = await confirm({
+      title: "Удалить аккаунт?",
+      message:
+        "Это действие необратимо. Все ваши проекты, заявки и связанные данные будут удалены.",
+      confirmLabel: "Удалить аккаунт",
+      cancelLabel: "Отмена",
+      tone: "danger",
+    });
+
+    if (!approved) return;
 
     try {
       await api.delete("/api/auth/account");
-
-      alert("Аккаунт успешно удален");
-      sessionStorage.removeItem("token");
-      sessionStorage.removeItem("user");
-      window.location.href = "/";
-    } catch (error) {
-      console.error("Ошибка при удалении аккаунта:", error);
-      alert(error.response?.data?.error || "Не удалось удалить аккаунт");
+      clearSession();
+      onUserUpdate?.(null);
+      success("Аккаунт удалён.");
+      navigate("/", { replace: true });
+    } catch (requestError) {
+      console.error("Ошибка удаления аккаунта:", requestError);
+      error(requestError.response?.data?.error || "Не удалось удалить аккаунт");
     }
   };
 
-  const generateCertificate = (project) => {
+  const generateCertificate = (participation) => {
     if (!profile) {
-      alert("Не удалось создать сертификат: данные профиля не загружены");
+      error("Не удалось создать сертификат: профиль ещё не загружен.");
       return;
     }
 
-    const certificateText = `
-СЕРТИФИКАТ ВОЛОНТЕРА
-Настоящим подтверждается, что
-${profile.firstName} ${profile.lastName}
-принял(а) участие в проекте:
-"${project.project.title}"
-Дата участия: ${new Date(project.createdAt).toLocaleDateString("ru-RU")}
-Организатор: ${project.project.creator.firstName} ${project.project.creator.lastName}
+    const certificateText = [
+      "СЕРТИФИКАТ ВОЛОНТЁРА",
+      "",
+      "Настоящим подтверждается, что",
+      `${profile.firstName} ${profile.lastName}`.trim(),
+      "принял(а) участие в проекте:",
+      `"${participation.project?.title || "Проект"}"`,
+      `Дата участия: ${formatDate(participation.createdAt)}`,
+      `Организатор: ${participation.project?.creator?.firstName || ""} ${
+        participation.project?.creator?.lastName || ""
+      }`.trim(),
+      "",
+      "Благодарим за вклад в развитие проекта.",
+    ].join("\n");
 
-Благодарим за ваш вклад!
-`;
-
-    const blob = new Blob([certificateText], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `сертификат_${project.project.title.replace(/\s+/g, "_")}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const file = new Blob([certificateText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(file);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `certificate_${(participation.project?.title || "project").replace(/\s+/g, "_")}.txt`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
     URL.revokeObjectURL(url);
   };
 
-  // Render guards
   if (!user) {
     return (
       <div className="error-container">
         <div className="error">
-          <h2>Ошибка загрузки</h2>
-          <p>Пользователь не авторизован</p>
-          <div className="error-actions">
-            <button
-              onClick={() => (window.location.href = "/login")}
-              className="btn btn-primary"
-              type="button"
-            >
-              Войти
-            </button>
-          </div>
+          <h2>Пользователь не авторизован</h2>
+          <p>Чтобы открыть личный кабинет, необходимо войти в систему.</p>
+          <button type="button" className="btn btn-primary" onClick={() => navigate("/login")}>
+            <Icon name="login" />
+            <span>Войти</span>
+          </button>
         </div>
       </div>
     );
   }
 
-  if (loading && !profile) {
-    return <div className="loading">Подготовка профиля...</div>;
+  if (loading || !profile) {
+    return <div className="loading">Подготавливаем личный кабинет...</div>;
   }
 
-  if (!profile) {
-    return <div className="loading">Подготовка профиля...</div>;
-  }
-
-  // UI
   return (
     <div className="profile">
-      <div className="profile-header">
-        <h1>Личный кабинет</h1>
-      </div>
+      <section className="profile-hero">
+        <div>
+          <p className="section-kicker">Личный кабинет</p>
+          <h1>{`${profile.firstName} ${profile.lastName}`.trim() || profile.email}</h1>
+          <p>
+            {getRoleLabel(profile.role)}. Здесь собраны профиль, рабочие вкладки и роль-зависимые
+            инструменты.
+          </p>
+        </div>
+
+        <div className="profile-summary">
+          <div className="profile-summary-item">
+            <span>Email</span>
+            <strong>{profile.email}</strong>
+          </div>
+          <div className="profile-summary-item">
+            <span>Роль</span>
+            <strong>{getRoleLabel(profile.role)}</strong>
+          </div>
+          <div className="profile-summary-item">
+            <span>Дата регистрации</span>
+            <strong>{formatDate(profile.createdAt)}</strong>
+          </div>
+          {profile.role === "volunteer" ? (
+            <div className="profile-summary-item">
+              <span>Баллы</span>
+              <strong>{profile.points ?? 0}</strong>
+            </div>
+          ) : null}
+        </div>
+      </section>
 
       <div className="profile-tabs">
-        <button
-          className={`tab ${activeTab === "profile" ? "active" : ""}`}
-          onClick={() => activeTab !== "profile" && setActiveTab("profile")}
-          type="button"
-        >
-          📝 Профиль
-        </button>
-
-        {/* Volunteer: история участия */}
-        {user?.role === "volunteer" && (
+        {tabs.map((tab) => (
           <button
-            className={`tab ${activeTab === "history" ? "active" : ""}`}
-            onClick={() => activeTab !== "history" && setActiveTab("history")}
+            key={tab.id}
             type="button"
+            className={`tab ${activeTab === tab.id ? "active" : ""}`}
+            onClick={() => setActiveTab(tab.id)}
           >
-            📊 История участия
+            <Icon name={tab.icon} />
+            <span>{tab.label}</span>
           </button>
-        )}
-
-        {/* Organizer: статистика + черновики */}
-        {user?.role === "organizer" && (
-          <>
-            <button
-              className={`tab ${activeTab === "stats" ? "active" : ""}`}
-              onClick={() => activeTab !== "stats" && setActiveTab("stats")}
-              type="button"
-            >
-              📊 Статистика
-            </button>
-
-            <button
-              className={`tab ${activeTab === "myProjects" ? "active" : ""}`}
-              onClick={() => activeTab !== "myProjects" && setActiveTab("myProjects")}
-              type="button"
-            >
-              📁 Мои проекты
-            </button>
-
-            <button
-              className={`tab ${activeTab === "drafts" ? "active" : ""}`}
-              onClick={() => activeTab !== "drafts" && setActiveTab("drafts")}
-              type="button"
-            >
-              📋 Черновики
-            </button>
-          </>
-        )}
-
-        {/* Admin: вкладка в профиле (если оставляешь) */}
-        {user?.role === "admin" && (
-          <button
-            className={`tab ${activeTab === "admin" ? "active" : ""}`}
-            onClick={() => activeTab !== "admin" && setActiveTab("admin")}
-            type="button"
-          >
-            🛡️ Админ-панель
-          </button>
-        )}
+        ))}
       </div>
 
       <div className="profile-content">
-        {activeTab === "profile" && (
-          <div className="profile-section">
+        {activeTab === "profile" ? (
+          <section className="profile-section">
             <div className="section-header">
-              <h2>Личная информация</h2>
+              <div>
+                <h2>Личные данные</h2>
+                <p>Контактная информация и личное описание, которое видят другие участники платформы.</p>
+              </div>
 
               {!editing ? (
-                <button className="btn btn-primary" onClick={handleEditStart} type="button">
-                  ✏️ Редактировать
+                <button type="button" className="btn btn-primary" onClick={handleStartEditing}>
+                  <Icon name="edit" />
+                  <span>Редактировать</span>
                 </button>
               ) : (
-                <div className="edit-actions">
-                  <button className="btn btn-success" onClick={handleSaveProfile} type="button">
-                    💾 Сохранить
+                <div className="profile-actions">
+                  <button type="submit" form="profile-form" className="btn btn-primary">
+                    <Icon name="save" />
+                    <span>Сохранить</span>
                   </button>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => {
-                      setEditing(false);
-                      setFormData({
-                        firstName: profile.firstName || "",
-                        lastName: profile.lastName || "",
-                        phone: profile.phone || "",
-                        skills: profile.skills || "",
-                        interests: profile.interests || "",
-                        bio: profile.bio || "",
-                      });
-                    }}
-                    type="button"
-                  >
-                    Отмена
+                  <button type="button" className="btn btn-secondary" onClick={handleCancelEditing}>
+                    <Icon name="close" />
+                    <span>Отмена</span>
                   </button>
                 </div>
               )}
             </div>
 
             {editing ? (
-              <form className="profile-form">
-                <div className="form-group">
-                  <label>Имя:</label>
+              <form id="profile-form" className="profile-form" onSubmit={handleSaveProfile}>
+                <label className="form-group">
+                  <span>Имя</span>
                   <input
                     type="text"
                     name="firstName"
-                    value={formData.firstName || ""}
+                    value={formData.firstName}
                     onChange={handleInputChange}
                     placeholder="Введите имя"
                   />
-                </div>
+                </label>
 
-                <div className="form-group">
-                  <label>Фамилия:</label>
+                <label className="form-group">
+                  <span>Фамилия</span>
                   <input
                     type="text"
                     name="lastName"
-                    value={formData.lastName || ""}
+                    value={formData.lastName}
                     onChange={handleInputChange}
                     placeholder="Введите фамилию"
                   />
-                </div>
+                </label>
 
-                <div className="form-group">
-                  <label>Телефон:</label>
+                <label className="form-group">
+                  <span>Телефон</span>
                   <input
                     type="text"
                     name="phone"
-                    value={formData.phone || ""}
+                    value={formData.phone}
                     onChange={handleInputChange}
                     placeholder="+79991234567"
-                    pattern="^\\+7\\d{10}$"
-                    maxLength="12"
                   />
-                  <small>Формат: +79991234567</small>
-                </div>
+                </label>
 
-                <div className="form-group">
-                  <label>Навыки:</label>
+                <label className="form-group">
+                  <span>Навыки</span>
                   <input
                     type="text"
                     name="skills"
-                    value={formData.skills || ""}
+                    value={formData.skills}
                     onChange={handleInputChange}
-                    placeholder="Перечислите ваши навыки через запятую"
+                    placeholder="Например: организация, работа с детьми, логистика"
                   />
-                </div>
+                </label>
 
-                <div className="form-group">
-                  <label>Интересы:</label>
+                <label className="form-group form-group-wide">
+                  <span>Интересы</span>
                   <textarea
                     name="interests"
-                    value={formData.interests || ""}
+                    rows={3}
+                    value={formData.interests}
                     onChange={handleInputChange}
-                    placeholder="Перечислите ваши интересы через запятую"
-                    rows="3"
+                    placeholder="Опишите, какие направления вам интересны"
                   />
-                </div>
+                </label>
 
-                <div className="form-group">
-                  <label>О себе:</label>
+                <label className="form-group form-group-wide">
+                  <span>О себе</span>
                   <textarea
                     name="bio"
-                    value={formData.bio || ""}
+                    rows={5}
+                    value={formData.bio}
                     onChange={handleInputChange}
-                    placeholder="Расскажите о себе, своем опыте волонтерства"
-                    rows="4"
+                    placeholder="Коротко расскажите о себе и опыте участия в проектах"
                   />
-                </div>
+                </label>
               </form>
             ) : (
-              <div className="profile-info">
-                <div className="info-grid">
-                  <div className="info-item">
-                    <strong>Имя Фамилия:</strong>
-                    <span>
-                      {profile.firstName} {profile.lastName}
-                    </span>
-                  </div>
-
-                  <div className="info-item">
-                    <strong>Email:</strong>
-                    <span>{profile.email}</span>
-                  </div>
-                  
-                  {profile?.role === "volunteer" && (
-                  <div className="info-item">
-                    <strong>Баллы:</strong>
-                    <span>⭐ {profile.points ?? 0}</span>
-                  </div>
-                  )}
-
-                  <div className="info-item">
-                    <strong>Телефон:</strong>
-                    <span>{formatPhoneDisplay(profile.phone)}</span>
-                  </div>
-
-                  <div className="info-item">
-                    <strong>Навыки:</strong>
-                    <span>{profile.skills || "Не указаны"}</span>
-                  </div>
-
-                  <div className="info-item">
-                    <strong>Интересы:</strong>
-                    <span>{profile.interests || "Не указаны"}</span>
-                  </div>
-
-                  <div className="info-item full-width">
-                    <strong>О себе:</strong>
-                    <span>{profile.bio || "Не указано"}</span>
-                  </div>
-
-                  <div className="info-item">
-                    <strong>Дата регистрации:</strong>
-                    <span>
-                      {profile.createdAt
-                        ? new Date(profile.createdAt).toLocaleDateString("ru-RU")
-                        : "Неизвестно"}
-                    </span>
-                  </div>
-                </div>
+              <div className="profile-info-grid">
+                <InfoCard label="Имя и фамилия" value={`${profile.firstName} ${profile.lastName}`.trim() || "Не указано"} />
+                <InfoCard label="Телефон" value={formatPhoneDisplay(profile.phone)} />
+                <InfoCard label="Навыки" value={profile.skills || "Не указаны"} />
+                <InfoCard label="Интересы" value={profile.interests || "Не указаны"} />
+                <InfoCard label="О себе" value={profile.bio || "Не указано"} wide />
               </div>
             )}
 
-            <div className="account-deletion-section">
-              <div className="danger-zone">
-                <button
-                  className="btn btn-danger"
-                  onClick={() => setShowDeleteConfirm(true)}
-                  type="button"
-                >
-                  🗑️ Удалить аккаунт
-                </button>
+            <div className="danger-zone">
+              <div>
+                <h3>Удаление аккаунта</h3>
+                <p>
+                  Используйте только если действительно хотите удалить профиль и связанные с ним
+                  данные без возможности восстановления.
+                </p>
+              </div>
+              <button type="button" className="btn btn-danger" onClick={handleDeleteAccount}>
+                <Icon name="delete_forever" />
+                <span>Удалить аккаунт</span>
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === "history" ? (
+          <section className="profile-section">
+            <div className="section-header">
+              <div>
+                <h2>История участия</h2>
+                <p>Завершённые или отменённые проекты, в которых вы были подтверждённым участником.</p>
               </div>
             </div>
-
-            {showDeleteConfirm && (
-              <div className="modal-overlay">
-                <div className="modal-content">
-                  <div className="modal-header">
-                    <h2>Подтверждение удаления аккаунта</h2>
-                    <button
-                      className="close-btn"
-                      onClick={() => setShowDeleteConfirm(false)}
-                      type="button"
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  <div className="delete-warning">
-                    <div className="warning-icon">⚠️</div>
-                    <h3>Внимание! Это действие необратимо</h3>
-                    <p>При удалении аккаунта будут безвозвратно удалены:</p>
-                    <ul>
-                      <li>✅ Все ваши личные данные</li>
-                      <li>✅ Все созданные вами проекты</li>
-                      <li>✅ Все поданные заявки</li>
-                      <li>✅ Вся история участия</li>
-                    </ul>
-                    <p>
-                      <strong>Вы уверены, что хотите продолжить?</strong>
-                    </p>
-                  </div>
-
-                  <div className="modal-actions">
-                    <button
-                      className="btn btn-danger"
-                      onClick={handleDeleteAccount}
-                      type="button"
-                    >
-                      Да, удалить аккаунт
-                    </button>
-                    <button
-                      className="btn btn-secondary"
-                      onClick={() => setShowDeleteConfirm(false)}
-                      type="button"
-                    >
-                      Отмена
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === "history" && (
-          <div className="profile-section">
-            <h2>История участия</h2>
             <ProjectHistory user={user} generateCertificate={generateCertificate} />
-          </div>
-        )}
+          </section>
+        ) : null}
 
-        {activeTab === "stats" && user?.role === "organizer" && (
-          <div className="profile-section">
+        {activeTab === "stats" && user.role === "organizer" ? (
+          <section className="profile-section">
             <OrganizerStats user={user} />
-          </div>
-        )}
+          </section>
+        ) : null}
 
-        {activeTab === "myProjects" && user?.role === "organizer" && (
-          <div className="profile-section">
-            <h2>Мои проекты</h2>
+        {activeTab === "myProjects" && user.role === "organizer" ? (
+          <section className="profile-section">
+            <div className="section-header">
+              <div>
+                <h2>Мои проекты</h2>
+                <p>Активные инициативы, требующие сопровождения и обработки заявок.</p>
+              </div>
+            </div>
             <OrganizerMyProjects user={user} />
-          </div>
-        )}
+          </section>
+        ) : null}
 
-        {activeTab === "drafts" && user?.role === "organizer" && (
-          <div className="profile-section">
+        {activeTab === "drafts" && user.role === "organizer" ? (
+          <section className="profile-section">
             <DraftProjects user={user} />
-          </div>
-        )}
+          </section>
+        ) : null}
 
-        {activeTab === "admin" && user?.role === "admin" && (
-  <div className="profile-section">
-    <AdminDashboard
-      user={user}
-      onOpenFullAdmin={() => (window.location.href = "/admin")}
-    />
-  </div>
-)}
+        {activeTab === "admin" && user.role === "admin" ? (
+          <section className="profile-section">
+            <AdminPanel user={user} embedded onOpenFullAdmin={() => navigate("/admin")} />
+          </section>
+        ) : null}
       </div>
     </div>
+  );
+}
+
+function InfoCard({ label, value, wide = false }) {
+  return (
+    <article className={`profile-info-card ${wide ? "profile-info-card-wide" : ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
   );
 }
 

@@ -1,291 +1,260 @@
-import React, { useEffect, useMemo, useState } from "react";
-import api from "../api/client";
+import React, { useEffect, useState } from "react";
 
-/**
- * EditProjectModal
- * Модалка редактирования проекта.
- *
- * ✅ ВАЖНО ПРО ТИПЫ:
- * У тебя в БД может быть enum в виде кодов (ECO/SOCIAL/EDU/MED/OTHER) ИЛИ русских строк.
- * Поэтому список option'ов подстраивается под текущий project.type:
- * - если текущий тип похож на код (ECO/SOCIAL/EDU/MED/OTHER) — используем коды
- * - иначе используем русские значения
- *
- * ❌ "Мероприятие" убрано.
- */
-function EditProjectModal({ project, onClose, onUpdated }) {
+import api from "../api/client";
+import { validateContactInfo } from "../utils/contactInfo";
+import { PROJECT_TYPE_OPTIONS } from "../utils/presentation";
+import { toDateInputValue } from "../utils/formatters";
+import { useFeedback } from "./ui/FeedbackProvider";
+import Icon from "./ui/Icon";
+
+function EditProjectModal({ project, onClose, onUpdated, onSave, onCancel }) {
   const [form, setForm] = useState({
     title: "",
     description: "",
-    type: "",
-    volunteersNeeded: 1,
+    status: "DRAFT",
     startDate: "",
     endDate: "",
     location: "",
+    projectType: "",
+    volunteersRequired: 1,
     contactInfo: "",
   });
   const [saving, setSaving] = useState(false);
 
-  const toDateInput = (v) => {
-    if (!v) return "";
-    const d = new Date(v);
-    if (Number.isNaN(d.getTime())) return "";
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  };
+  const { error, success } = useFeedback();
+  const handleClose = onClose || onCancel;
 
   useEffect(() => {
     if (!project) return;
+
     setForm({
       title: project.title || "",
       description: project.description || "",
-      type: project.type || "",
-      volunteersNeeded: project.volunteersNeeded ?? 1,
-      startDate: toDateInput(project.startDate),
-      endDate: toDateInput(project.endDate),
+      status: project.status || "DRAFT",
+      startDate: toDateInputValue(project.startDate),
+      endDate: toDateInputValue(project.endDate),
       location: project.location || "",
+      projectType: project.projectType || project.type || "",
+      volunteersRequired:
+        project.volunteersRequired != null ? project.volunteersRequired : project.volunteersNeeded || 1,
       contactInfo: project.contactInfo || "",
     });
   }, [project]);
 
-  // блокируем скролл страницы, пока открыта модалка
   useEffect(() => {
-    const prev = document.body.style.overflow;
+    if (!project) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = previousOverflow;
     };
-  }, []);
-
-  const setField = (name, value) => setForm((p) => ({ ...p, [name]: value }));
-
-  const isCodeType = useMemo(() => {
-    const t = (project?.type || "").toUpperCase();
-    return ["ECO", "SOCIAL", "EDU", "MED", "OTHER"].includes(t);
   }, [project]);
 
-  const typeOptions = useMemo(() => {
-    // ❌ EVENT нет
-    if (isCodeType) {
-      return [
-        { value: "", label: "Выберите тип" },
-        { value: "ECO", label: "Экология" },
-        { value: "SOCIAL", label: "Социальная помощь" },
-        { value: "EDU", label: "Образование" },
-        { value: "MED", label: "Медицина" },
-        { value: "OTHER", label: "Другое" },
-      ];
-    }
-    // русский enum/строки в БД
-    return [
-      { value: "", label: "Выберите тип" },
-      { value: "Экология", label: "Экология" },
-      { value: "Социальная помощь", label: "Социальная помощь" },
-      { value: "Образование", label: "Образование" },
-      { value: "Медицина", label: "Медицина" },
-      { value: "Другое", label: "Другое" },
-    ];
-  }, [isCodeType]);
-
-  // если текущий тип не совпал ни с одним option (например, старое значение) — добавим его,
-  // чтобы select был корректным и не ломал сохранение.
-  const normalizedTypeOptions = useMemo(() => {
-    const values = new Set(typeOptions.map((o) => o.value));
-    const current = project?.type || "";
-    if (current && !values.has(current)) {
-      return [{ value: current, label: `Текущий: ${current}` }, ...typeOptions];
-    }
-    return typeOptions;
-  }, [typeOptions, project]);
+  const setField = (name, value) => {
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
 
   const validate = () => {
     if (!form.title.trim()) return "Введите название проекта";
     if (!form.description.trim()) return "Введите описание проекта";
-    if (!form.type) return "Выберите тип проекта";
-    const vn = Number(form.volunteersNeeded);
-    if (!Number.isFinite(vn) || vn < 1) return "Требуется волонтёров: минимум 1";
 
-    if (form.startDate && form.endDate) {
-      const s = new Date(form.startDate);
-      const e = new Date(form.endDate);
-      if (s > e) return "Дата окончания не может быть раньше даты начала";
+    const volunteersRequired = Number(form.volunteersRequired);
+    if (!Number.isFinite(volunteersRequired) || volunteersRequired < 1) {
+      return "Количество волонтеров должно быть не меньше 1";
     }
+
+    if (form.startDate && form.endDate && new Date(form.startDate) > new Date(form.endDate)) {
+      return "Дата окончания не может быть раньше даты начала";
+    }
+
+    if (form.contactInfo.trim()) {
+      const contactValidation = validateContactInfo(form.contactInfo);
+      if (!contactValidation.ok) return contactValidation.message;
+    }
+
     return null;
   };
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-    const err = validate();
-    if (err) return alert(err);
+  const handleSave = async (event) => {
+    event.preventDefault();
+    if (saving) return;
+
+    const validationError = validate();
+    if (validationError) {
+      error(validationError, "Проверьте форму");
+      return;
+    }
 
     setSaving(true);
     try {
-      // ✅ Даты отправляем YYYY-MM-DD (или null) — безопасно для серверной валидации
       const payload = {
         title: form.title.trim(),
         description: form.description.trim(),
-        type: form.type, // важно: значение соответствует enum (кодам или русским строкам)
-        volunteersNeeded: Number(form.volunteersNeeded),
+        status: form.status || undefined,
         startDate: form.startDate || null,
         endDate: form.endDate || null,
-        location: form.location.trim(),
-        contactInfo: form.contactInfo.trim(),
+        location: form.location.trim() || null,
+        projectType: form.projectType || null,
+        volunteersRequired: Number(form.volunteersRequired),
+        contactInfo: form.contactInfo.trim() || null,
       };
 
-      await api.put(`/api/projects/${project.id}`, payload);
+      if (onSave) {
+        await onSave({
+          ...project,
+          ...payload,
+        });
+      } else {
+        await api.put(`/api/projects/${project.id}`, payload);
+      }
 
-      if (onUpdated) await onUpdated();
-    } catch (error) {
-      console.error("EditProjectModal save error:", error);
-      const details = error?.response?.data?.details;
-      const msg =
-        details ||
-        error?.response?.data?.error ||
-        error?.response?.data?.message ||
+      success("Изменения сохранены.");
+      await onUpdated?.();
+      handleClose?.();
+    } catch (requestError) {
+      console.error("Ошибка сохранения проекта:", requestError);
+      const message =
+        requestError?.response?.data?.details ||
+        requestError?.response?.data?.error ||
+        requestError?.response?.data?.message ||
         "Не удалось сохранить изменения";
-      alert(msg);
+      error(message);
     } finally {
       setSaving(false);
     }
   };
 
-  const onOverlayMouseDown = (e) => {
-    if (e.target === e.currentTarget) onClose?.();
-  };
-
   if (!project) return null;
 
   return (
-    <div
-      onMouseDown={onOverlayMouseDown}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.35)",
-        zIndex: 9999,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
-    >
-      <div
-        style={{
-          width: "min(900px, 100%)",
-          maxHeight: "90vh",
-          overflow: "auto",
-          background: "#fff",
-          borderRadius: 16,
-          boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
-          padding: 18,
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
-          <div style={{ fontWeight: 800, fontSize: 18 }}>Редактировать проект</div>
-          <button type="button" onClick={onClose} disabled={saving}>
-            ✖
+    <div className="modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && handleClose?.()}>
+      <div className="modal-content" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h2>Редактирование проекта</h2>
+            <p>{project.title}</p>
+          </div>
+          <button type="button" className="close-btn" onClick={handleClose} disabled={saving} aria-label="Закрыть">
+            <Icon name="close" />
           </button>
         </div>
 
-        <form onSubmit={handleSave} style={{ display: "grid", gap: 12 }}>
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Название проекта *</div>
+        <form className="project-form-surface" onSubmit={handleSave}>
+          <div className="form-group">
+            <label htmlFor="edit-project-modal-title">Название проекта</label>
             <input
+              id="edit-project-modal-title"
               value={form.title}
-              onChange={(e) => setField("title", e.target.value)}
-              style={{ width: "100%", padding: 10 }}
-              placeholder="Например: Помощь приюту"
+              onChange={(event) => setField("title", event.target.value)}
+              placeholder="Например: Городской субботник"
             />
           </div>
 
-          <div>
-            <div style={{ fontWeight: 700, marginBottom: 6 }}>Описание *</div>
+          <div className="form-group">
+            <label htmlFor="edit-project-modal-description">Описание</label>
             <textarea
+              id="edit-project-modal-description"
               value={form.description}
-              onChange={(e) => setField("description", e.target.value)}
-              style={{ width: "100%", padding: 10, minHeight: 110 }}
-              placeholder="Коротко опишите, что нужно делать"
+              onChange={(event) => setField("description", event.target.value)}
+              rows="5"
+              placeholder="Коротко опишите, что требуется и как будет организована работа."
             />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Тип проекта *</div>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="edit-project-modal-type">Тип проекта</label>
               <select
-                value={form.type}
-                onChange={(e) => setField("type", e.target.value)}
-                style={{ width: "100%", padding: 10 }}
+                id="edit-project-modal-type"
+                value={form.projectType}
+                onChange={(event) => setField("projectType", event.target.value)}
               >
-                {normalizedTypeOptions.map((o) => (
-                  <option key={o.value || "__empty"} value={o.value}>
-                    {o.label}
+                <option value="">Выберите тип</option>
+                {PROJECT_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>
             </div>
 
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Требуется волонтёров *</div>
+            <div className="form-group">
+              <label htmlFor="edit-project-modal-volunteers">Требуется волонтеров</label>
               <input
+                id="edit-project-modal-volunteers"
                 type="number"
                 min="1"
-                value={form.volunteersNeeded}
-                onChange={(e) => setField("volunteersNeeded", e.target.value)}
-                style={{ width: "100%", padding: 10 }}
+                value={form.volunteersRequired}
+                onChange={(event) => setField("volunteersRequired", event.target.value)}
               />
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Дата начала</div>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="edit-project-modal-start-date">Дата начала</label>
               <input
+                id="edit-project-modal-start-date"
                 type="date"
                 value={form.startDate}
-                onChange={(e) => setField("startDate", e.target.value)}
-                style={{ width: "100%", padding: 10 }}
+                onChange={(event) => setField("startDate", event.target.value)}
               />
             </div>
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Дата окончания</div>
+
+            <div className="form-group">
+              <label htmlFor="edit-project-modal-end-date">Дата окончания</label>
               <input
+                id="edit-project-modal-end-date"
                 type="date"
                 value={form.endDate}
-                onChange={(e) => setField("endDate", e.target.value)}
-                style={{ width: "100%", padding: 10 }}
+                onChange={(event) => setField("endDate", event.target.value)}
               />
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Локация</div>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="edit-project-modal-location">Локация</label>
               <input
+                id="edit-project-modal-location"
                 value={form.location}
-                onChange={(e) => setField("location", e.target.value)}
-                style={{ width: "100%", padding: 10 }}
-                placeholder="Город, адрес"
+                onChange={(event) => setField("location", event.target.value)}
+                placeholder="Город, адрес или площадка"
               />
             </div>
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 6 }}>Контакты</div>
+
+            <div className="form-group">
+              <label htmlFor="edit-project-modal-contact-info">Контакты</label>
               <input
+                id="edit-project-modal-contact-info"
                 value={form.contactInfo}
-                onChange={(e) => setField("contactInfo", e.target.value)}
-                style={{ width: "100%", padding: 10 }}
-                placeholder="email/телефон/ссылка"
+                onChange={(event) => setField("contactInfo", event.target.value)}
+                placeholder="Email или телефон"
               />
             </div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 4 }}>
-            <button type="button" onClick={onClose} disabled={saving}>
+          <div className="form-group">
+            <label htmlFor="edit-project-modal-status">Статус</label>
+            <select id="edit-project-modal-status" value={form.status} onChange={(event) => setField("status", event.target.value)}>
+              <option value="DRAFT">Черновик</option>
+              <option value="ACTIVE">Активный</option>
+              <option value="COMPLETED">Завершен</option>
+              <option value="CANCELLED">Отменен</option>
+            </select>
+          </div>
+
+          <div className="project-form-actions">
+            <button type="button" className="btn btn-secondary" onClick={handleClose} disabled={saving}>
               Отмена
             </button>
-            <button type="submit" disabled={saving}>
-              {saving ? "Сохранение..." : "Сохранить"}
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? "Сохраняем..." : "Сохранить"}
             </button>
           </div>
         </form>

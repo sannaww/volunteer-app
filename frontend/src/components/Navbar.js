@@ -1,132 +1,143 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import "./Navbar.css";
 
 import api from "../api/client";
 import { createSocket } from "../api/socket";
+import { formatPersonName, truncateText } from "../utils/formatters";
+import Icon from "./ui/Icon";
+import "./Navbar.css";
 
 function Navbar({ user, onLogout }) {
   const [totalUnread, setTotalUnread] = useState(0);
   const socketRef = useRef(null);
+  const profileLabel = user
+    ? truncateText(user.firstName || formatPersonName(user, "Профиль"), 18)
+    : "Профиль";
 
   const fetchTotalUnread = async () => {
     if (!user) {
       setTotalUnread(0);
       return;
     }
+
     try {
-      const res = await api.get("/api/messages/conversations");
-      const convs = res.data || [];
-      const sum = convs.reduce((acc, c) => acc + (c.unreadCount || 0), 0);
-      setTotalUnread(sum);
-    } catch (e) {
-      // не спамим алертами, просто в консоль
-      console.error("Ошибка при подсчете unread:", e);
+      const response = await api.get("/api/messages/conversations");
+      const conversations = Array.isArray(response.data) ? response.data : [];
+      const total = conversations.reduce((sum, conversation) => sum + (conversation.unreadCount || 0), 0);
+      setTotalUnread(total);
+    } catch (requestError) {
+      console.error("Ошибка подсчета непрочитанных сообщений:", requestError);
     }
   };
 
-  // 1) при входе/смене пользователя — получить initial unread
   useEffect(() => {
     fetchTotalUnread();
   }, [user?.id]);
 
-  // 2) слушаем WS события и обновляем unread
   useEffect(() => {
-    if (!user) return;
+    if (!user) return undefined;
 
-    const s = createSocket();
-    socketRef.current = s;
+    const socket = createSocket();
+    socketRef.current = socket;
 
-    s.on("connect", () => {
-      // на всякий случай обновим при коннекте
-      fetchTotalUnread();
+    socket.on("connect", fetchTotalUnread);
+    socket.on("message:new", fetchTotalUnread);
+    socket.on("messages:read", fetchTotalUnread);
+    socket.on("unread:count", ({ total }) => setTotalUnread(Number(total) || 0));
+    socket.on("connect_error", (requestError) => {
+      console.log("Navbar WS error:", requestError.message);
     });
-
-    // При новом входящем сообщении — обновляем unread
-    s.on("message:new", () => {
-      fetchTotalUnread();
-    });
-
-    // Когда что-то отмечено как прочитанное — тоже обновим
-    s.on("messages:read", () => {
-      fetchTotalUnread();
-    });
-
-    s.on("unread:count", ({ total }) => {
-  setTotalUnread(Number(total) || 0);
-});
-
-
-    // Если вдруг переподключение/ошибка
-    s.on("connect_error", (e) => {
-      console.log("Navbar WS error:", e.message);
-    });
-    
 
     return () => {
-      s.disconnect();
+      socket.disconnect();
     };
   }, [user?.id]);
 
   return (
     <nav className="navbar">
-      <div className="navbar-left">
-        <div className="navbar-brand">
-          <Link to="/">Волонтерские проекты</Link>
+      <div className="navbar-shell">
+        <div className="navbar-left">
+          <Link to="/" className="navbar-brand">
+            <span className="brand-mark" aria-hidden="true" />
+            <span>
+              <strong>Помогаем вместе</strong>
+              <small>волонтерская платформа</small>
+            </span>
+          </Link>
         </div>
 
-        {user && (
-          <div className="user-welcome-nav">
-            Привет, {user.firstName}!
-            {user?.role === "volunteer" && typeof user.points === "number" && (
-              <span style={{ marginLeft: 10 }}>⭐ {user.points}</span>
-            )}
-          </div>
-        )}
-      </div>
+        <div className="navbar-links">
+          <Link to="/" className="nav-link">
+            <Icon name="home" />
+            <span>Проекты</span>
+          </Link>
 
-      <div className="navbar-links">
-        <Link to="/">Все проекты</Link>
+          {user ? (
+            <>
+              {(user.role === "organizer" || user.role === "admin") && (
+                <Link to="/create-project" className="nav-link">
+                  <Icon name="add_circle" />
+                  <span>Создать проект</span>
+                </Link>
+              )}
 
-        {user ? (
-          <>
-            {user.role === "organizer" && (
-              <>
-                <Link to="/create-project">Создать проект</Link>
-                <Link to="/organizer/calendar">Календарь</Link>
-              </>
-            )}
+              {(user.role === "organizer" || user.role === "admin") && (
+                <Link to="/organizer/calendar" className="nav-link">
+                  <Icon name="calendar_month" />
+                  <span>Календарь</span>
+                </Link>
+              )}
 
-            {user.role === "admin" && <Link to="/organizer/calendar">Календарь</Link>}
+              {user.role === "volunteer" && (
+                <Link to="/favorites" className="nav-link">
+                  <Icon name="favorite" />
+                  <span>Избранное</span>
+                </Link>
+              )}
 
-            {user.role === "volunteer" && <Link to="/favorites">Избранное</Link>}
+              {user.role === "volunteer" && (
+                <Link to="/my-applications" className="nav-link">
+                  <Icon name="description" />
+                  <span>Мои заявки</span>
+                </Link>
+              )}
 
-            {user.role === "volunteer" && <Link to="/my-applications">Мои заявки</Link>}
+              {user.role === "admin" && (
+                <Link to="/admin" className="nav-link">
+                  <Icon name="shield" />
+                  <span>Админ-панель</span>
+                </Link>
+              )}
 
-            {user?.role === "admin" && (
-              <Link to="/admin" className="nav-link">
-                Админ-панель
+              <Link to="/profile" className="nav-link nav-link-profile">
+                <Icon name="person" />
+                <span>{profileLabel}</span>
               </Link>
-            )}
 
-            <Link to="/profile">Личный кабинет</Link>
+              <Link to="/chat" className="nav-link chat-link-with-badge">
+                <Icon name="chat_bubble" />
+                <span>Сообщения</span>
+                {totalUnread > 0 ? <span className="nav-badge-dot">{totalUnread > 99 ? "99+" : totalUnread}</span> : null}
+              </Link>
 
-            {/* ✅ Сообщения + красная точка */}
-            <Link to="/chat" className="chat-link-with-badge">
-              💬 Сообщения
-              {totalUnread > 0 && <span className="nav-badge-dot" />}
-            </Link>
-
-            <button onClick={onLogout} className="logout-btn">
-              Выйти
-            </button>
-          </>
-        ) : (
-          <>
-            <Link to="/login">Войти</Link>
-            <Link to="/register">Регистрация</Link>
-          </>
-        )}
+              <button onClick={onLogout} className="logout-btn" type="button">
+                <Icon name="logout" />
+                <span>Выйти</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="nav-link">
+                <Icon name="login" />
+                <span>Войти</span>
+              </Link>
+              <Link to="/register" className="nav-link nav-link-emphasis">
+                <Icon name="how_to_reg" />
+                <span>Регистрация</span>
+              </Link>
+            </>
+          )}
+        </div>
       </div>
     </nav>
   );
