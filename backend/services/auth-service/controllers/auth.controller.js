@@ -1,12 +1,12 @@
 const authService = require('../services/auth.service');
 
-/**POST /api/auth/register*/
+//POST /api/auth/register
 async function register(req, res) {
   try {
     const user = await authService.registerUser(req.body);
     res.status(201).json(user);
   } catch (error) {
-    // ✅ если пользователь уже существует — 409
+    //если пользователь уже существует — 409
     const msg = String(error.message || "");
     if (msg.toLowerCase().includes("уже существует")) {
       return res.status(409).json({ message: error.message });
@@ -14,9 +14,7 @@ async function register(req, res) {
     return res.status(400).json({ message: error.message });
   }
 }
-
-
-/**POST /api/auth/login*/
+//POST /api/auth/login
 async function login(req, res) {
   try {
     const { email, password } = req.body;
@@ -26,8 +24,7 @@ async function login(req, res) {
     res.status(401).json({ message: error.message });
   }
 }
-
-/**GET /api/auth/me*/
+//GET /api/auth/me
 async function getMe(req, res) {
   try {
     const token = req.headers.authorization?.split(' ')[1];
@@ -37,8 +34,7 @@ async function getMe(req, res) {
     res.status(401).json({ message: error.message });
   }
 }
-
-/** PUT /profile*/
+//PUT /profile
 async function updateProfile(req, res) {
   try {
     const token = req.headers.authorization?.split(' ')[1];
@@ -48,8 +44,7 @@ async function updateProfile(req, res) {
     res.status(400).json({ message: error.message });
   }
 }
-
-/**GET /api/auth/users/:id  Используется другими сервисами (чат)*/
+//GET /api/auth/users/:id  Используется другими сервисами (чат)
 async function getUserById(req, res) {
   try {
     const userId = Number(req.params.id);
@@ -68,7 +63,7 @@ async function getUserById(req, res) {
     res.status(500).json({ message: error.message });
   }
 }
-/** DELETE /api/auth/account */
+//DELETE /api/auth/account
 async function deleteAccount(req, res) {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -78,7 +73,6 @@ async function deleteAccount(req, res) {
     return res.status(400).json({ message: error.message });
   }
 }
-
 
 module.exports = {
   register,

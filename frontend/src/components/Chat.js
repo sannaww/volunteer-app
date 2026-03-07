@@ -123,12 +123,77 @@ function Chat({ user }) {
     setHighlightMessageId(null);
   };
 
+  const getUnreadTotal = (items = []) =>
+    items.reduce(
+      (sum, conversation) => sum + Math.max(0, Number(conversation?.unreadCount) || 0),
+      0
+    );
+
+  const emitUnreadUpdate = (items) => {
+    const total = Array.isArray(items) ? getUnreadTotal(items) : Math.max(0, Number(items) || 0);
+
+    window.dispatchEvent(
+      new CustomEvent("unread:update", {
+        detail: { total },
+      })
+    );
+  };
+
+  const syncConversations = (updater) => {
+    setConversations((prev) => {
+      const nextValue = typeof updater === "function" ? updater(prev) : updater;
+      const next = Array.isArray(nextValue) ? nextValue : [];
+
+      emitUnreadUpdate(next);
+      return next;
+    });
+  };
+
+  const syncConversationPreview = (message, { incrementUnread = false } = {}) => {
+    const currentUser = userRef.current;
+    if (!message?.id || !currentUser?.id) return;
+
+    const isIncoming = message.receiverId === currentUser.id;
+    const partnerId = isIncoming ? message.senderId : message.receiverId;
+    const activePartnerId = activeConversationRef.current?.user?.id;
+
+    syncConversations((prev) => {
+      const index = prev.findIndex((conversation) => conversation?.user?.id === partnerId);
+      if (index < 0) return prev;
+
+      const currentConversation = prev[index];
+      const nextConversation = {
+        ...currentConversation,
+        lastMessage: {
+          ...(currentConversation.lastMessage || {}),
+          id: message.id,
+          text: message.text,
+          createdAt: message.createdAt,
+          senderId: message.senderId,
+          receiverId: message.receiverId,
+          deliveredAt: message.deliveredAt ?? currentConversation.lastMessage?.deliveredAt ?? null,
+          readAt: message.readAt ?? currentConversation.lastMessage?.readAt ?? null,
+        },
+        unreadCount:
+          incrementUnread && activePartnerId !== partnerId
+            ? (Number(currentConversation.unreadCount) || 0) + 1
+            : activePartnerId === partnerId
+              ? 0
+              : Number(currentConversation.unreadCount) || 0,
+      };
+
+      const next = [...prev];
+      next.splice(index, 1);
+      return [nextConversation, ...next];
+    });
+  };
+
   const fetchConversations = async () => {
     if (!userRef.current) return;
 
     try {
       const response = await api.get("/api/messages/conversations");
-      setConversations(Array.isArray(response.data) ? response.data : []);
+      syncConversations(Array.isArray(response.data) ? response.data : []);
     } catch (requestError) {
       console.error("Ошибка при загрузке диалогов:", requestError);
     } finally {
@@ -305,13 +370,11 @@ function Chat({ user }) {
   };
 
   const markConversationAsReadLocal = (partnerId) => {
-    setConversations((prev) =>
+    syncConversations((prev) =>
       prev.map((conversation) =>
         conversation?.user?.id === partnerId ? { ...conversation, unreadCount: 0 } : conversation
       )
     );
-
-    window.dispatchEvent(new Event("unread:update"));
   };
 
   const handleSelectConversation = (conversation) => {
@@ -394,7 +457,9 @@ function Chat({ user }) {
 
     try {
       await api.delete(`/api/messages/conversation/${partnerId}`);
-      setConversations((prev) => prev.filter((conversation) => conversation?.user?.id !== partnerId));
+      syncConversations((prev) =>
+        prev.filter((conversation) => conversation?.user?.id !== partnerId)
+      );
       setActiveConversation(null);
       setMessages([]);
       resetSearch();
@@ -422,7 +487,6 @@ function Chat({ user }) {
     }
 
     fetchConversations();
-    window.dispatchEvent(new Event("unread:update"));
   }, [navigate, user]);
 
   useEffect(() => {
@@ -464,25 +528,32 @@ function Chat({ user }) {
     const onNewMessage = (message) => {
       const currentUser = userRef.current;
       const conversation = activeConversationRef.current;
+      if (!currentUser?.id) return;
 
-      fetchConversations();
-
-      if (!conversation?.user?.id || !currentUser?.id) return;
-
-      const partnerId = conversation.user.id;
+      const partnerId = conversation?.user?.id;
       const belongsToCurrentThread =
-        (message.senderId === partnerId && message.receiverId === currentUser.id) ||
-        (message.senderId === currentUser.id && message.receiverId === partnerId);
+        Boolean(partnerId) &&
+        ((message.senderId === partnerId && message.receiverId === currentUser.id) ||
+          (message.senderId === currentUser.id && message.receiverId === partnerId));
+
+      syncConversationPreview(message, {
+        incrementUnread: message.receiverId === currentUser.id && !belongsToCurrentThread,
+      });
 
       if (belongsToCurrentThread) {
         addMessageIfNotExists(message);
         window.setTimeout(scrollToBottom, 0);
         socket.emit("conversation:read", { partnerId });
         markConversationAsReadLocal(partnerId);
+        window.setTimeout(fetchConversations, 160);
+        return;
       }
+
+      fetchConversations();
     };
 
     const onMessageSent = (message) => {
+      syncConversationPreview(message);
       addMessageIfNotExists(message);
       fetchConversations();
       window.setTimeout(scrollToBottom, 0);

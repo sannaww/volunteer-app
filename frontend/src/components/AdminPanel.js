@@ -441,7 +441,7 @@ function AdminPanel({ user, embedded = false, onOpenFullAdmin }) {
                   <div className="admin-card-actions">
                     <button
                       type="button"
-                      className="btn btn-danger"
+                      className="btn btn-danger admin-review-delete-btn"
                       onClick={() => deleteReview(review.id)}
                     >
                       <Icon name="delete" />

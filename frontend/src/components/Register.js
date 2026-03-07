@@ -2,10 +2,10 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import api from "../api/client";
-import { setPrefillLoginEmail } from "../utils/authSession";
+import { setPrefillLoginEmail, setSessionToken, setSessionUser } from "../utils/authSession";
 import "./Auth.css";
 
-function Register() {
+function Register({ onLogin }) {
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -51,22 +51,37 @@ function Register() {
     setIsSuccess(false);
     setLoading(true);
 
-    try {
-      const payload = {
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-        email: formData.email.trim(),
-        password: formData.password,
-        role: formData.role,
-        contactInfo: formData.contactInfo.trim() || null,
-      };
+    const payload = {
+      firstName: formData.firstName.trim(),
+      lastName: formData.lastName.trim(),
+      email: formData.email.trim(),
+      password: formData.password,
+      role: formData.role,
+      contactInfo: formData.contactInfo.trim() || null,
+    };
 
+    try {
       await api.post("/api/auth/register", payload);
 
-      setIsSuccess(true);
-      setMessage("Регистрация завершена. Переходим ко входу.");
-      setPrefillLoginEmail(payload.email);
-      navigate("/login");
+      try {
+        const loginResponse = await api.post("/api/auth/login", {
+          email: payload.email,
+          password: payload.password,
+        });
+
+        setSessionToken(loginResponse.data.token);
+        setSessionUser(loginResponse.data.user);
+        onLogin?.(loginResponse.data.user);
+        navigate("/", { replace: true });
+      } catch (loginError) {
+        setIsSuccess(false);
+        setMessage("Аккаунт создан, но автоматический вход не выполнился. Перенаправляем на страницу входа.");
+        setPrefillLoginEmail(payload.email);
+        console.error("Ошибка автоматического входа после регистрации:", loginError);
+        window.setTimeout(() => {
+          navigate("/login", { replace: true });
+        }, 300);
+      }
     } catch (requestError) {
       setIsSuccess(false);
       setMessage(getNiceError(requestError));

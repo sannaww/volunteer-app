@@ -62,16 +62,12 @@ function requireRole(allowedRoles = []) {
   };
 }
 
-// helper: считаем write-методами POST/PUT/PATCH/DELETE
+//helper: считаем write-методами POST/PUT/PATCH/DELETE
 function isWriteMethod(method) {
   return ["POST", "PUT", "PATCH", "DELETE"].includes(method);
 }
 
-/**
- * ✅ REVIEWS — ФИНАЛЬНОЕ РЕШЕНИЕ
- * Express "срезает" mount-path (/api/reviews) и в proxy часто приходит "/my".
- * Мы всегда отправляем в сервис полный req.originalUrl ("/api/reviews/my").
- */
+//REVIEWS
 app.use(
   "/api/reviews",
   attachAuth,
@@ -80,7 +76,7 @@ app.use(
     target: PROJECTS_SERVICE_URL,
     changeOrigin: true,
 
-    // ⭐ вот ключ: всегда проксируем полный путь
+    //всегда проксируем полный путь
     pathRewrite: (path, req) => req.originalUrl,
 
     onProxyReq: (proxyReq, req) => {
@@ -89,7 +85,7 @@ app.use(
   })
 );
 
-// Proxy → Auth Service (5001)
+//Proxy → Auth Service (5001)
 app.use(
   "/api/auth",
   createProxyMiddleware({
@@ -99,7 +95,7 @@ app.use(
   })
 );
 
-// ✅ Proxy → Profile (Auth Service 5001)
+//Proxy → Profile (Auth Service 5001)
 app.use(
   "/api/profile",
   attachAuth,
@@ -128,7 +124,7 @@ app.use(
     // favorites: всегда с токеном
     if (isFavoritesRoute) return attachAuth(req, res, next);
 
-    // ✅ reviews:
+    //reviews:
     // - GET /reviews/:projectId публично (без токена)
     // - НО /reviews/my требует токен (иначе Missing x-user-id)
     const isReviewsMy = req.path === "/reviews/my";
@@ -157,16 +153,16 @@ app.use(
 
     if (isFavoritesRoute) return requireRole(["volunteer", "admin"])(req, res, next);
 
-    // ✅ reviews:
+    //reviews:
     const isReviewsMy = req.path === "/reviews/my";
     if (isReviewsMy) return requireRole(["volunteer", "admin"])(req, res, next);
 
-    // PUT/DELETE отзыва — только volunteer/admin
+    // PUT/DELETE отзыва - только volunteer/admin
     if (isReviewsRoute && ["PUT", "DELETE"].includes(req.method)) {
       return requireRole(["volunteer", "admin"])(req, res, next);
     }
 
-    // POST отзыва — только volunteer/admin
+    // POST отзыва - только volunteer/admin
     if (isReviewsRoute && req.method === "POST") {
       return requireRole(["volunteer", "admin"])(req, res, next);
     }
@@ -219,7 +215,7 @@ app.use(
   })
 );
 
-// Proxy → Messages (пока внутри applications-service 5003)
+// Proxy → Messages
 app.use(
   "/api/messages",
   attachAuth,
@@ -230,8 +226,7 @@ app.use(
   })
 );
 
-// ✅ Proxy → Socket.IO (applications-service 5003)
-// Важно: для Express mount-path "/socket.io" обрезается, поэтому восстанавливаем originalUrl.
+//Proxy → Socket.IO (applications-service 5003)
 const socketIoProxy = createProxyMiddleware({
   target: APPLICATIONS_SERVICE_URL,
   changeOrigin: true,

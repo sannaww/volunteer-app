@@ -9,6 +9,11 @@ import "./Navbar.css";
 function Navbar({ user, onLogout }) {
   const [totalUnread, setTotalUnread] = useState(0);
   const socketRef = useRef(null);
+  const greetingName =
+    user?.firstName?.trim() ||
+    user?.lastName?.trim() ||
+    user?.email?.split("@")?.[0] ||
+    "пользователь";
 
   const fetchTotalUnread = async () => {
     if (!user) {
@@ -28,6 +33,24 @@ function Navbar({ user, onLogout }) {
 
   useEffect(() => {
     fetchTotalUnread();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return undefined;
+
+    const handleUnreadUpdate = (event) => {
+      const nextTotal = Number(event?.detail?.total);
+
+      if (Number.isFinite(nextTotal)) {
+        setTotalUnread(Math.max(0, nextTotal));
+        return;
+      }
+
+      fetchTotalUnread();
+    };
+
+    window.addEventListener("unread:update", handleUnreadUpdate);
+    return () => window.removeEventListener("unread:update", handleUnreadUpdate);
   }, [user?.id]);
 
   useEffect(() => {
@@ -60,6 +83,15 @@ function Navbar({ user, onLogout }) {
               <small>волонтерская платформа</small>
             </span>
           </Link>
+          {user ? (
+            <div
+              className="navbar-greeting"
+              title={`Привет, ${greetingName}!`}
+              aria-label={`Привет, ${greetingName}!`}
+            >
+              <span>Привет, {greetingName}!</span>
+            </div>
+          ) : null}
         </div>
 
         <div className="navbar-links">
@@ -113,7 +145,13 @@ function Navbar({ user, onLogout }) {
               <Link to="/chat" className="nav-link chat-link-with-badge">
                 <Icon name="chat_bubble" />
                 <span>Сообщения</span>
-                {totalUnread > 0 ? <span className="nav-badge-dot">{totalUnread > 99 ? "99+" : totalUnread}</span> : null}
+                {totalUnread > 0 ? (
+                  <span
+                    className="nav-badge-dot"
+                    aria-label={`Непрочитанные сообщения: ${totalUnread}`}
+                    title={`Непрочитанных сообщений: ${totalUnread}`}
+                  />
+                ) : null}
               </Link>
 
               <button onClick={onLogout} className="logout-btn" type="button">
