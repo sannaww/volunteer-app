@@ -571,8 +571,8 @@ function ProjectCard({
                   <Icon name="description" />
                   <span>Подать заявку</span>
                 </button>
-                <button className="btn btn-secondary" type="button" onClick={onMessage}>
-                  <Icon name="chat_bubble" />
+                <button className="btn btn-secondary project-message-btn" type="button" onClick={onMessage}>
+                  <Icon name="comment" className="project-message-icon" />
                   <span>Написать организатору</span>
                 </button>
               </>

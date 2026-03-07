@@ -194,7 +194,39 @@
   font-size: 0.85rem;
 }
 
-.project-card-actions .btn span {
+.project-message-btn {
+  display: grid;
+  grid-template-columns: 1.2rem minmax(0, 1fr);
+  gap: 0.5rem;
+  justify-content: stretch;
+  align-items: center;
+  text-align: left;
+}
+
+.project-card-actions .btn .app-icon {
+  flex: 0 0 auto;
+  overflow: visible;
+  font-size: 1rem;
+}
+
+.project-message-btn .project-message-icon {
+  width: 1.1rem;
+  min-width: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary-strong);
+  font-size: 1.14rem;
+  line-height: 1;
+  font-variation-settings:
+    "FILL" 1,
+    "wght" 600,
+    "GRAD" 0,
+    "opsz" 24;
+}
+
+.project-card-actions .btn > span:not(.app-icon) {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
