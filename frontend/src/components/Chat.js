@@ -63,8 +63,8 @@ function Chat({ user }) {
     return "?";
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (behavior = "smooth") => {
+    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
   };
 
   const addMessageIfNotExists = (message) => {
@@ -147,7 +147,7 @@ function Chat({ user }) {
       setMessages(items);
       setHasMore(!Array.isArray(data) && Boolean(data?.hasMore));
       setNextCursor(!Array.isArray(data) ? data?.nextCursor || null : null);
-      window.setTimeout(scrollToBottom, 0);
+      window.setTimeout(() => scrollToBottom("auto"), 0);
     } catch (requestError) {
       console.error("Ошибка при загрузке сообщений:", requestError);
     }
@@ -368,7 +368,6 @@ function Chat({ user }) {
 
       await fetchMessages(activeConversation);
       await fetchConversations();
-      scrollToBottom();
     } catch (requestError) {
       console.error("Ошибка при отправке сообщения:", requestError);
       error(

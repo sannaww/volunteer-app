@@ -3,16 +3,12 @@ import { Link } from "react-router-dom";
 
 import api from "../api/client";
 import { createSocket } from "../api/socket";
-import { formatPersonName, truncateText } from "../utils/formatters";
 import Icon from "./ui/Icon";
 import "./Navbar.css";
 
 function Navbar({ user, onLogout }) {
   const [totalUnread, setTotalUnread] = useState(0);
   const socketRef = useRef(null);
-  const profileLabel = user
-    ? truncateText(user.firstName || formatPersonName(user, "Профиль"), 18)
-    : "Профиль";
 
   const fetchTotalUnread = async () => {
     if (!user) {
@@ -111,7 +107,7 @@ function Navbar({ user, onLogout }) {
 
               <Link to="/profile" className="nav-link nav-link-profile">
                 <Icon name="person" />
-                <span>{profileLabel}</span>
+                <span>Профиль</span>
               </Link>
 
               <Link to="/chat" className="nav-link chat-link-with-badge">
