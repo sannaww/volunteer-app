@@ -9,6 +9,24 @@ export function formatDate(value, locale = "ru-RU") {
   return date.toLocaleDateString(locale);
 }
 
+export function formatDateRange(startValue, endValue, locale = "ru-RU") {
+  const startDate = new Date(startValue);
+  const endDate = new Date(endValue);
+
+  const hasStart = Boolean(startValue) && !Number.isNaN(startDate.getTime());
+  const hasEnd = Boolean(endValue) && !Number.isNaN(endDate.getTime());
+
+  if (!hasStart && !hasEnd) return formatDate(null, locale);
+  if (!hasStart) return formatDate(endValue, locale);
+  if (!hasEnd) return formatDate(startValue, locale);
+
+  const start = startDate.toLocaleDateString(locale);
+  const end = endDate.toLocaleDateString(locale);
+
+  if (start === end) return start;
+  return `${start}-${end}`;
+}
+
 export function formatDateTime(value, locale = "ru-RU") {
   if (!value) return "Не указано";
   const date = new Date(value);

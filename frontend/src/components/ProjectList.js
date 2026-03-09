@@ -6,7 +6,7 @@ import { addFavorite, getFavorites, removeFavorite } from "../api/favorites";
 import { canReview } from "../api/canReview";
 import { createReview, getReviews } from "../api/reviews";
 import { setSelectedOrganizer } from "../utils/authSession";
-import { formatDate, formatDateTime, formatPersonName, formatPhoneDisplay } from "../utils/formatters";
+import { formatDateRange, formatDateTime, formatPersonName, formatPhoneDisplay } from "../utils/formatters";
 import { getProjectStatusMeta, getProjectTypeLabel } from "../utils/presentation";
 import EditProjectModal from "./EditProjectModal";
 import ProjectFilters from "./ProjectFilters";
@@ -492,6 +492,15 @@ function ProjectCard({
   onOpenReviews,
 }) {
   const statusMeta = getProjectStatusMeta(project.status);
+  const canVolunteerAct = user?.role === "volunteer" && project.status !== "CANCELLED";
+  const canVolunteerApply = canVolunteerAct && project.status === "ACTIVE";
+  const showVolunteerUnavailableState = canVolunteerAct && project.status !== "ACTIVE";
+  const actionsCount =
+    (canVolunteerApply ? 2 : 0) +
+    (showVolunteerUnavailableState ? 1 : 0) +
+    (canVolunteerAct ? 1 : 0) +
+    1 +
+    (canManageProject ? 3 : 0);
 
   return (
     <article className="project-card">
@@ -529,7 +538,7 @@ function ProjectCard({
       <div className="project-meta">
         <div className="meta-item">
           <strong>Дата</strong>
-          <span>{formatDate(project.startDate)}</span>
+          <span>{formatDateRange(project.startDate, project.endDate)}</span>
         </div>
         <div className="meta-item">
           <strong>Локация</strong>
@@ -562,10 +571,10 @@ function ProjectCard({
         </div>
       </div>
 
-      <div className="project-actions project-card-actions">
-        {user?.role === "volunteer" && project.status !== "CANCELLED" ? (
+      <div className={`project-actions project-card-actions${actionsCount === 1 ? " project-card-actions-single" : ""}`}>
+        {canVolunteerAct ? (
           <>
-            {project.status === "ACTIVE" ? (
+            {canVolunteerApply ? (
               <>
                 <button className="btn btn-primary" type="button" onClick={() => onApply(project.id)}>
                   <Icon name="description" />
@@ -576,11 +585,11 @@ function ProjectCard({
                   <span>Написать организатору</span>
                 </button>
               </>
-            ) : (
+            ) : showVolunteerUnavailableState ? (
               <div className="project-not-available">
                 {project.status === "COMPLETED" ? "Проект завершен" : "Проект недоступен"}
               </div>
-            )}
+            ) : null}
 
             <button className="btn btn-secondary" type="button" onClick={onOpenReview}>
               <Icon name="rate_review" />
