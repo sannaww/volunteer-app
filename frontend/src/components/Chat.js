@@ -5,6 +5,7 @@ import api from "../api/client";
 import { createSocket } from "../api/socket";
 import { consumeSelectedOrganizer } from "../utils/authSession";
 import {
+  formatDate,
   formatTime,
   formatPersonName,
   truncateText,
@@ -14,6 +15,21 @@ import EmptyState from "./ui/EmptyState";
 import Icon from "./ui/Icon";
 import { useFeedback } from "./ui/FeedbackProvider";
 import "./Chat.css";
+
+function isSameCalendarDay(leftValue, rightValue) {
+  const left = new Date(leftValue);
+  const right = new Date(rightValue);
+
+  if (Number.isNaN(left.getTime()) || Number.isNaN(right.getTime())) {
+    return false;
+  }
+
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
 
 function Chat({ user }) {
   const [conversations, setConversations] = useState([]);
@@ -763,31 +779,41 @@ function Chat({ user }) {
                   description="Начните диалог первым сообщением."
                 />
               ) : (
-                messages.map((message) => {
+                messages.map((message, index) => {
+                  const previousMessage = messages[index - 1];
                   const deliveryState = getDeliveryState(message);
+                  const showDateSeparator =
+                    !previousMessage || !isSameCalendarDay(previousMessage.createdAt, message.createdAt);
 
                   return (
-                    <div
-                      key={message.id}
-                      className={`message-row ${message.senderId === user.id ? "sent" : "received"}`}
-                    >
+                    <React.Fragment key={message.id}>
+                      {showDateSeparator ? (
+                        <div className="message-day-separator">
+                          <span>{formatDate(message.createdAt)}</span>
+                        </div>
+                      ) : null}
+
                       <div
-                        id={`msg-${message.id}`}
-                        className={`message-bubble ${
-                          highlightMessageId === message.id ? "message-bubble-highlight" : ""
-                        }`}
+                        className={`message-row ${message.senderId === user.id ? "sent" : "received"}`}
                       >
-                        <p>{highlightText(message.text, searchOpen ? searchQuery : "")}</p>
-                        <div className="message-meta">
-                          <span>{formatTime(message.createdAt)}</span>
-                          {deliveryState ? (
-                            <span className={`message-status ${deliveryState.className}`}>
-                              <Icon name={deliveryState.icon} />
-                            </span>
-                          ) : null}
+                        <div
+                          id={`msg-${message.id}`}
+                          className={`message-bubble ${
+                            highlightMessageId === message.id ? "message-bubble-highlight" : ""
+                          }`}
+                        >
+                          <p>{highlightText(message.text, searchOpen ? searchQuery : "")}</p>
+                          <div className="message-meta">
+                            <span>{formatTime(message.createdAt)}</span>
+                            {deliveryState ? (
+                              <span className={`message-status ${deliveryState.className}`}>
+                                <Icon name={deliveryState.icon} />
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    </React.Fragment>
                   );
                 })
               )}
