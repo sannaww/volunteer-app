@@ -14,7 +14,7 @@ router.patch('/projects/:id/reject', adminController.rejectProject);
 router.get('/reviews', adminController.getAllReviews);
 router.delete('/reviews/:id', adminController.deleteReviewById);
 
-// Отчёты / аналитика
+// Отчёты
 router.get('/reports/summary', adminController.getReportsSummary);
 router.get('/reports/user-growth', adminController.getUserGrowthReport);
 router.get('/reports/project-categories', adminController.getProjectCategoriesReport);

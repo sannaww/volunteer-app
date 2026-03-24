@@ -1,6 +1,6 @@
 const prisma = require("../prismaClient");
 
-// Отправить сообщение
+// POST /messages
 exports.sendMessage = async (req, res) => {
   try {
     const senderId = Number(req.headers["x-user-id"] || req.user?.userId);
@@ -26,7 +26,7 @@ exports.sendMessage = async (req, res) => {
   }
 };
 
-// Получить переписку
+// GET /messages/conversation/:userId
 exports.getConversation = async (req, res) => {
   try {
     const currentUserId = Number(req.headers["x-user-id"] || req.user?.userId);
@@ -52,7 +52,7 @@ exports.getConversation = async (req, res) => {
   }
 };
 
-// Получить список диалогов (последние сообщения)
+// GET /messages/conversations
 exports.getConversations = async (req, res) => {
   try {
     const userId = Number(req.headers["x-user-id"] || req.user?.userId);
@@ -70,7 +70,6 @@ exports.getConversations = async (req, res) => {
   }
 };
 
-// Поиск по сообщениям в конкретном диалоге
 // GET /messages/conversation/:partnerId/search?q=...&limit=20&cursor=123
 exports.searchInConversation = async (req, res) => {
   try {
@@ -126,7 +125,6 @@ exports.searchInConversation = async (req, res) => {
   }
 };
 
-// Jump-to-message: вокруг сообщения
 // GET /messages/conversation/:partnerId/around/:messageId?before=30&after=30
 exports.getAroundMessage = async (req, res) => {
   try {

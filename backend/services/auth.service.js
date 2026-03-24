@@ -5,18 +5,16 @@ const jwt = require('jsonwebtoken');
 const prisma = new PrismaClient();
 const JWT_SECRET = 'your-secret-key';
 
-/**
- * Регистрация пользователя
- */
+// Регистрация
 async function registerUser(data) {
   const { email, password, firstName, lastName, role, contactInfo } = data;
 
-  // Проверка обязательных полей
+  // Обязательные поля
   if (!email || !password || !firstName || !lastName) {
     throw new Error('Все обязательные поля должны быть заполнены');
   }
 
-  // Проверяем, существует ли пользователь
+  // Проверяем email
   const existingUser = await prisma.user.findUnique({
     where: { email }
   });
@@ -25,7 +23,7 @@ async function registerUser(data) {
     throw new Error('Пользователь с таким email уже существует');
   }
 
-  // Проверка contactInfo (если есть)
+  // Проверяем contactInfo
   if (contactInfo) {
     const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactInfo);
     const isPhone = /^\+7\d{10}$/.test(contactInfo.replace(/\s|\(|\)|-/g, ''));
@@ -53,15 +51,13 @@ async function registerUser(data) {
     }
   });
 
-  // Убираем пароль из ответа
+  // Убираем пароль
   const { password: _, ...userWithoutPassword } = user;
 
   return userWithoutPassword;
 }
 
-/**
- * Логин пользователя
- */
+// Логин
 async function loginUser(email, password) {
   if (!email || !password) {
     throw new Error('Email и пароль обязательны');
@@ -98,9 +94,7 @@ async function loginUser(email, password) {
   };
 }
 
-/**
- * Получить текущего пользователя по токену
- */
+// Текущий пользователь
 async function getMe(token) {
   if (!token) {
     throw new Error('Токен не предоставлен');

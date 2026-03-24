@@ -1,8 +1,6 @@
 const prisma = require("../prismaClient");
 
-//Добавили поля: - applicationsCount (всего заявок) 
-//- pendingApplicationsCount (новых заявок со статусом PENDING)
-//чтобы на карточке проекта поле "Заявки: Всего" не было пустым.
+// Считаем заявки для карточки проекта
 
 exports.getAllProjects = async (query = {}) => {
   const {
@@ -18,7 +16,7 @@ exports.getAllProjects = async (query = {}) => {
 
   const where = {};
 
-  // 1) Статус
+  // Статус
   if (status) {
     if (String(status).includes(",")) {
       where.status = { in: String(status).split(",") };
@@ -29,7 +27,7 @@ exports.getAllProjects = async (query = {}) => {
     where.status = { not: "DRAFT" };
   }
 
-  // 2) Поиск по названию/описанию
+  // Поиск
   if (search && String(search).trim()) {
     const s = String(search).trim();
     where.OR = [
@@ -38,17 +36,17 @@ exports.getAllProjects = async (query = {}) => {
     ];
   }
 
-  // 3) Тип проекта
+  // Тип проекта
   if (projectType && String(projectType).trim()) {
     where.projectType = projectType;
   }
 
-  // 4) Локация
+  // Локация
   if (location && String(location).trim()) {
     where.location = { contains: String(location).trim(), mode: "insensitive" };
   }
 
-  // 5) Диапазон дат (или проекты без даты)
+  // Диапазон дат
   if (dateFrom || dateTo) {
     where.AND = where.AND || [];
     where.AND.push({
@@ -64,7 +62,7 @@ exports.getAllProjects = async (query = {}) => {
     });
   }
 
-  // 6) Сортировка
+  // Сортировка
   const allowedSort = new Set(["createdAt", "startDate", "title"]);
   const safeSortBy = allowedSort.has(sortBy) ? sortBy : "createdAt";
   const safeSortOrder = sortOrder === "asc" ? "asc" : "desc";
@@ -191,7 +189,7 @@ exports.updateProject = async (id, data) => {
     }
   }
 
-  // ✅ Маппинг фронтовых полей -> Prisma
+  // Поля с фронта
   if (updateData.type !== undefined) {
     updateData.projectType = updateData.type;
     delete updateData.type;
@@ -235,14 +233,14 @@ exports.deleteProject = async (id) => {
   });
 };
 
-// ✅ Календарь: organizer видит свои, admin — все (organizerId = null)
+// Календарь
 exports.getOrganizerProjectsForCalendar = async ({ organizerId, start, end }) => {
   const where = {
     startDate: { not: null, lt: end },
     endDate: { not: null, gte: start },
   };
 
-  // ВАЖНО: фильтр по владельцу добавляем только если organizerId передан
+  // Фильтр по владельцу нужен только для organizer
   if (organizerId !== null && organizerId !== undefined) {
     where.createdBy = organizerId;
   }
@@ -265,7 +263,7 @@ exports.getOrganizerProjectsForCalendar = async ({ organizerId, start, end }) =>
   });
 };
 
-// Список проектов текущего организатора / администратора
+// Список проектов организатора
 exports.getOrganizerProjects = async ({
   organizerId,
   status = "ALL",
@@ -274,7 +272,7 @@ exports.getOrganizerProjects = async ({
 }) => {
   const where = {};
 
-  // organizer -> только свои, admin -> все
+  // Admin видит все, organizer только свои
   if (organizerId !== null && organizerId !== undefined) {
     where.createdBy = organizerId;
   }

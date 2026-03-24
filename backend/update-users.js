@@ -3,7 +3,7 @@ const prisma = new PrismaClient();
 
 async function updateExistingUsers() {
   try {
-    // Обновляем всех существующих пользователей
+    // Обновляем пользователей
     const result = await prisma.user.updateMany({
       data: {
         emailVerified: true,
@@ -11,10 +11,10 @@ async function updateExistingUsers() {
       }
     });
 
-    console.log(`✅ Обновлено ${result.count} пользователей`);
+    console.log(`Обновлено ${result.count} пользователей`);
     console.log('Теперь все пользователи могут входить без подтверждения email');
   } catch (error) {
-    console.error('❌ Ошибка при обновлении пользователей:', error);
+    console.error('Ошибка при обновлении пользователей:', error);
   } finally {
     await prisma.$disconnect();
   }

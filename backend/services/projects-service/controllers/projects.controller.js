@@ -1,6 +1,6 @@
 const projectsService = require('../services/projects.service');
 
-// helper: кто пришёл из Gateway
+// Пользователь из gateway
 function getUserFromHeaders(req) {
   const userId = req.headers['x-user-id'];
   const role = req.headers['x-user-role'];
@@ -18,18 +18,18 @@ function parseDateOrNull(value) {
 }
 
 function validateDatesPayload(data) {
-  // если дат нет — ок
+  // Если дат нет
   if (data.startDate === undefined && data.endDate === undefined) return;
 
   const start = parseDateOrNull(data.startDate);
   const end = parseDateOrNull(data.endDate);
 
-  // если один есть, другой нет — ошибка
+  // Нужны обе даты
   if ((start && !end) || (!start && end)) {
     throw new Error("Нужно указать обе даты: startDate и endDate");
   }
 
-  // если обе пустые/не переданы — ок
+  // Обе даты можно не передавать
   if (!start && !end) return;
 
   if (start > end) {
@@ -152,7 +152,6 @@ exports.deleteProject = async (req, res) => {
   }
 };
 
-// Календарь мероприятий организатора / администратора
 // GET /organizer/calendar?month=YYYY-MM
 exports.getOrganizerCalendar = async (req, res) => {
   try {
@@ -170,19 +169,18 @@ exports.getOrganizerCalendar = async (req, res) => {
 
     const [year, mon] = month.split("-").map(Number);
 
-    // Границы месяца (локально, без UTC — для UI так проще)
+    // Границы месяца
     const start = new Date(year, mon - 1, 1, 0, 0, 0);
     const end = new Date(year, mon, 1, 0, 0, 0); // 1-е число следующего месяца
 
-    // organizer -> только свои проекты
-    // admin -> ВСЕ проекты (без фильтра по creatorId)
+    // Admin видит все, organizer только свои
     const organizerId = role === "admin" ? null : userId;
 
     const projects = await projectsService.getOrganizerProjectsForCalendar({
       organizerId,
       start,
       end,
-      role, // передаём на случай, если сервис умеет учитывать роль
+      role,
     });
 
     return res.json({
@@ -215,7 +213,7 @@ exports.getOrganizerProjects = async (req, res) => {
     const search = (req.query.search || "").toString();
 
     const projects = await projectsService.getOrganizerProjects({
-      organizerId: role === "admin" ? null : userId, // admin может видеть все в этом списке (если сервис поддерживает)
+      organizerId: role === "admin" ? null : userId,
       role,
       status,
       includeDrafts,

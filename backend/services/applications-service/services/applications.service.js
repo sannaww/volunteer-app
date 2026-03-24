@@ -1,15 +1,15 @@
 const prisma = require("../prismaClient");
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || "http://localhost:5001";
-const POINTS_FOR_APPROVE = Number(process.env.POINTS_FOR_APPROVE || 10); // сколько баллов даём за одобренную заявку
+const POINTS_FOR_APPROVE = Number(process.env.POINTS_FOR_APPROVE || 10); // Баллы за одобрение
 
-// Создать заявку (volunteer)
+// Создать заявку
 exports.createApplication = async ({ userId, projectId, message }) => {
-  // проект должен быть ACTIVE
+  // Принимаем только active-проекты
   const project = await prisma.project.findUnique({ where: { id: projectId } });
   if (!project) throw new Error('Проект не найден');
   if (project.status !== 'ACTIVE') throw new Error('Нельзя подать заявку на неактивный проект');
 
-  // уникальность (userId, projectId) обеспечена @@unique, но сделаем красивую ошибку
+  // Проверяем дубль
   const existing = await prisma.application.findFirst({
     where: { userId, projectId }
   });
@@ -28,7 +28,7 @@ exports.createApplication = async ({ userId, projectId, message }) => {
   });
 };
 
-// Мои заявки (любая роль, но реально пользуется volunteer)
+// Мои заявки
 exports.getMyApplications = async (userId) => {
   return prisma.application.findMany({
     where: { userId },
@@ -43,12 +43,12 @@ exports.getMyApplications = async (userId) => {
   });
 };
 
-// Заявки по проекту (organizer/admin)
+// Заявки по проекту
 exports.getProjectApplications = async ({ projectId, requesterId, requesterRole }) => {
   const project = await prisma.project.findUnique({ where: { id: projectId } });
   if (!project) throw new Error('Проект не найден');
 
-  // organizer -> только свой проект
+  // Organizer видит только свои проекты
   if (requesterRole === 'organizer' && project.createdBy !== requesterId) {
     throw new Error('Нет доступа к заявкам этого проекта');
   }
@@ -69,7 +69,7 @@ exports.getProjectApplications = async ({ projectId, requesterId, requesterRole 
 return apps;
 };
 
-// Отмена заявки (volunteer, только своя и только PENDING)
+// Отмена заявки
 exports.cancelMyApplication = async ({ applicationId, userId }) => {
   const app = await prisma.application.findUnique({ where: { id: applicationId } });
   if (!app) throw new Error('Заявка не найдена');
@@ -80,7 +80,7 @@ exports.cancelMyApplication = async ({ applicationId, userId }) => {
   return { message: 'Заявка успешно отменена', cancelledApplicationId: applicationId };
 };
 
-// Смена статуса (organizer/admin)
+// Смена статуса
 exports.updateStatus = async ({ applicationId, newStatus, requesterId, requesterRole }) => {
   const app = await prisma.application.findUnique({
     where: { id: applicationId },
@@ -89,62 +89,60 @@ exports.updateStatus = async ({ applicationId, newStatus, requesterId, requester
   
   if (!app) throw new Error('Заявка не найдена');
 
-  // organizer -> только свой проект
+  // Organizer меняет только свои заявки
   if (requesterRole === 'organizer' && app.project.createdBy !== requesterId) {
     throw new Error('Нет прав для изменения этой заявки');
   }
 
-  // менять статус можно только из PENDING (логично)
+  // Меняем только из PENDING
   if (app.status !== 'PENDING') {
     throw new Error('Нельзя изменить заявку со статусом: ' + app.status);
   }
 
-  // 1️⃣ Сначала обновляем статус
-const updated = await prisma.application.update({
-  where: { id: applicationId },
-  data: { status: newStatus },
-  include: {
-    user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } }
-  }
-});
-
-// 2️⃣ Если заявка одобрена — начисляем баллы
-if (newStatus === "APPROVED") {
-
-  // Проверяем, начисляли ли уже
-  const already = await prisma.pointsLog.findUnique({
-    where: { applicationId: updated.id }
+  const updated = await prisma.application.update({
+    where: { id: applicationId },
+    data: { status: newStatus },
+    include: {
+      user: { select: { id: true, firstName: true, lastName: true, email: true, role: true } }
+    }
   });
 
-  if (!already) {
-    // вызываем auth-service
-    const resp = await fetch(`${AUTH_SERVICE_URL}/internal/add-points`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        userId: updated.userId,
-        points: POINTS_FOR_APPROVE,
-        reason: `Approve application #${updated.id}`
-      })
+  // При одобрении начисляем баллы
+  if (newStatus === "APPROVED") {
+
+    // Проверяем дубль
+    const already = await prisma.pointsLog.findUnique({
+      where: { applicationId: updated.id }
     });
 
-    if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error("Ошибка начисления баллов: " + text);
-    }
+    if (!already) {
+      // Начисляем баллы через auth-service
+      const resp = await fetch(`${AUTH_SERVICE_URL}/internal/add-points`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: updated.userId,
+          points: POINTS_FOR_APPROVE,
+          reason: `Approve application #${updated.id}`
+        })
+      });
 
-    // фиксируем начисление
-    await prisma.pointsLog.create({
-      data: {
-        userId: updated.userId,
-        applicationId: updated.id,
-        points: POINTS_FOR_APPROVE,
-        reason: "Approve application"
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error("Ошибка начисления баллов: " + text);
       }
-    });
-  }
-}
 
-// 3️⃣ Возвращаем обновлённую заявку
-return updated; 
+      // Фиксируем начисление
+      await prisma.pointsLog.create({
+        data: {
+          userId: updated.userId,
+          applicationId: updated.id,
+          points: POINTS_FOR_APPROVE,
+          reason: "Approve application"
+        }
+      });
+    }
+  }
+
+  return updated;
 };

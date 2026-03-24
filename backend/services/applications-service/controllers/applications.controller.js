@@ -9,7 +9,6 @@ function getUserFromHeaders(req) {
   };
 }
 
-// POST /:projectId
 exports.createApplication = async (req, res) => {
   try {
     const { userId, role } = getUserFromHeaders(req);
@@ -26,7 +25,6 @@ exports.createApplication = async (req, res) => {
   }
 };
 
-// GET /my
 exports.getMyApplications = async (req, res) => {
   try {
     const { userId } = getUserFromHeaders(req);
@@ -39,7 +37,6 @@ exports.getMyApplications = async (req, res) => {
   }
 };
 
-// GET /project/:projectId
 exports.getProjectApplications = async (req, res) => {
   try {
     const { userId, role } = getUserFromHeaders(req);
@@ -48,7 +45,6 @@ exports.getProjectApplications = async (req, res) => {
 
     const projectId = parseInt(req.params.projectId, 10);
 
-    // Organizer может смотреть только заявки на СВОИ проекты
     const apps = await applicationsService.getProjectApplications({ projectId, requesterId: userId, requesterRole: role });
     res.json(apps);
   } catch (e) {
@@ -56,7 +52,6 @@ exports.getProjectApplications = async (req, res) => {
   }
 };
 
-// DELETE /:id
 exports.cancelMyApplication = async (req, res) => {
   try {
     const { userId, role } = getUserFromHeaders(req);
@@ -72,7 +67,6 @@ exports.cancelMyApplication = async (req, res) => {
   }
 };
 
-// PATCH /:id/approve
 exports.approveApplication = async (req, res) => {
   try {
     const { userId, role } = getUserFromHeaders(req);
@@ -93,7 +87,6 @@ exports.approveApplication = async (req, res) => {
   }
 };
 
-// PATCH /:id/reject
 exports.rejectApplication = async (req, res) => {
   try {
     const { userId, role } = getUserFromHeaders(req);

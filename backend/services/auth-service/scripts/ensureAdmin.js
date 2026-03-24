@@ -5,7 +5,7 @@ const prisma = require("../prismaClient");
 try {
   require("dotenv").config({ path: path.join(__dirname, "..", "..", ".env") });
 } catch (error) {
-  // dotenv is optional when env vars are injected by container runtime
+  // Локально читаем .env
 }
 
 function normalizeEmail(value) {

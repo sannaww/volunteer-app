@@ -5,7 +5,7 @@ const jwt = require("jsonwebtoken");
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
-// helpers
+// Нормализация
 function normalizeEmail(v) {
   return String(v || "").trim().toLowerCase();
 }
@@ -21,9 +21,8 @@ function normalizeRole(v) {
 }
 
 function normalizePhone(v) {
-  // оставляем только цифры и плюс
   const raw = String(v || "").trim();
-  const cleaned = raw.replace(/[^\d+]/g, ""); // убираем пробелы, скобки, дефисы
+  const cleaned = raw.replace(/[^\d+]/g, "");
   return cleaned;
 }
 
@@ -36,9 +35,9 @@ function isValidRuPhonePlus7(v) {
   return /^\+7\d{10}$/.test(phone);
 }
 
-// Регистрация пользователя
+// Регистрация
 async function registerUser(data) {
-  // принимаем и camelCase, и варианты из Postman
+  // Поддерживаем разные имена полей
   const email = normalizeEmail(data.email);
   const password = data.password;
 
@@ -50,22 +49,22 @@ async function registerUser(data) {
   const role = normalizeRole(data.role);
   const contactInfo = data.contactInfo ?? data.contact ?? data.phone ?? null;
 
-  // Проверка обязательных полей
+  // Обязательные поля
   if (!email || !password || !firstName || !lastName) {
     throw new Error("Все обязательные поля должны быть заполнены");
   }
 
-  // запрет регистрации админа публично
+  // Админа через форму не создаём
   if (role === "admin") {
     throw new Error("Нельзя зарегистрировать администратора через форму регистрации");
   }
 
-  // можно разрешить только эти роли
+  // Допустимые роли
   if (!["volunteer", "organizer"].includes(role)) {
     throw new Error("Некорректная роль. Разрешены: volunteer, organizer");
   }
 
-  // Проверяем, существует ли пользователь
+  // Проверяем email
   const existingUser = await prisma.user.findUnique({
     where: { email },
   });
@@ -74,7 +73,7 @@ async function registerUser(data) {
     throw new Error("Пользователь с таким email уже существует");
   }
 
-  // Проверка contactInfo (если есть)
+  // Проверяем contactInfo
   if (contactInfo) {
     const ci = String(contactInfo).trim();
     const ok = isValidEmail(ci) || isValidRuPhonePlus7(ci);
@@ -93,20 +92,18 @@ async function registerUser(data) {
       password: hashedPassword,
       firstName,
       lastName,
-      role, // уже нормализованная
+      role,
       emailVerified: true,
       emailVerificationToken: null,
-      // если в Prisma есть phone и хочешь сохранить телефон из contactInfo:
-      // phone: isValidRuPhonePlus7(contactInfo) ? normalizePhone(contactInfo) : null,
     },
   });
 
-  // Убираем пароль из ответа
+  // Убираем пароль
   const { password: _pwd, ...userWithoutPassword } = user;
   return userWithoutPassword;
 }
 
-// Логин пользователя
+// Логин
 async function loginUser(email, password) {
   const emailNorm = normalizeEmail(email);
 
@@ -122,7 +119,7 @@ async function loginUser(email, password) {
     throw new Error("Пользователь не найден");
   }
 
-  // ✅ ПРОВЕРКА БЛОКИРОВКИ
+  // Проверяем блокировку
   if (user.isBlocked) {
     throw new Error("Ваш аккаунт заблокирован администратором");
   }
@@ -150,7 +147,7 @@ async function loginUser(email, password) {
   };
 }
 
-// Получить текущего пользователя по токену
+// Текущий пользователь
 async function getMe(token) {
   if (!token) {
     throw new Error("Токен не предоставлен");
@@ -249,11 +246,8 @@ async function deleteAccount(token) {
     throw new Error("Недействительный токен");
   }
 
-  // важно: удаляем по id из токена
+  // Берём id из токена
   const userId = decoded.userId;
-
-  // если у тебя есть зависимости (favorites/reviews/applications) — лучше делать soft delete.
-  // но для диплома можно удалить user, если FK позволяют.
 
   await prisma.user.delete({ where: { id: userId } });
 

@@ -5,7 +5,7 @@ module.exports = function requireUser(req, res, next) {
     return res.status(401).json({ error: "Unauthorized: x-user-id missing" });
   }
 
-  // чтобы твой код работал как раньше (req.user.userId)
+  // Совместимость со старым кодом
   req.user = { userId: Number(userId) };
   next();
 };

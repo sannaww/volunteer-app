@@ -1,8 +1,6 @@
 const authService = require('../services/auth.service');
 
-/**
- * POST /api/auth/register
- */
+// POST /api/auth/register
 async function register(req, res) {
   try {
     const user = await authService.registerUser(req.body);
@@ -12,9 +10,7 @@ async function register(req, res) {
   }
 }
 
-/**
- * POST /api/auth/login
- */
+// POST /api/auth/login
 async function login(req, res) {
   try {
     const { email, password } = req.body;
@@ -25,9 +21,7 @@ async function login(req, res) {
   }
 }
 
-/**
- * GET /api/auth/me
- */
+// GET /api/auth/me
 async function getMe(req, res) {
   try {
     const token = req.headers.authorization?.split(' ')[1];

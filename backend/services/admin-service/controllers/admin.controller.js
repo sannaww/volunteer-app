@@ -200,7 +200,7 @@ exports.deleteReviewById = async (req, res) => {
   }
 };
 
-// Reports
+// Отчёты
 exports.getReportsSummary = async (req, res) => {
   try {
     const [usersTotal, projectsTotal, activeProjects, draftProjects, completedProjects, cancelledProjects, reviewsTotal] =

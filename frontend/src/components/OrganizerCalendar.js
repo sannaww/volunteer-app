@@ -198,7 +198,8 @@ export default function OrganizerCalendar() {
     }
   };
 
-  useEffect(() => { loadMonth(); /* eslint-disable-next-line */ }, [m]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { loadMonth(); }, [m]);
 
   const availableTypes = useMemo(() => {
     const set = new Set();

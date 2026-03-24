@@ -3,7 +3,7 @@ const prisma = require("../prismaClient");
 const APPLICATIONS_SERVICE_URL =
   process.env.APPLICATIONS_SERVICE_URL || "http://localhost:5003";
 
-// projectId в schema.prisma: Int
+// projectId — число
 function parseProjectId(projectIdParam) {
   const n = Number(projectIdParam);
   if (!Number.isInteger(n) || n <= 0) return null;
@@ -28,7 +28,7 @@ async function recalcProjectRating(projectId, tx = prisma) {
   return { avgRating, reviewsCount };
 }
 
-// ✅ GET /reviews/my  (Мои отзывы)
+// GET /reviews/my
 exports.getMyReviews = async (req, res) => {
   try {
     const userId = req.headers["x-user-id"];
@@ -36,7 +36,6 @@ exports.getMyReviews = async (req, res) => {
 
     if (!userId) return res.status(401).json({ message: "Missing x-user-id" });
 
-    // Если хочешь строго только волонтёру — оставь проверку
     if (userRole && userRole !== "volunteer") {
       return res.status(403).json({ message: "Forbidden" });
     }
@@ -66,7 +65,7 @@ exports.getMyReviews = async (req, res) => {
   }
 };
 
-// ✅ DELETE /reviews/:id  (Удалить мой отзыв)
+// DELETE /reviews/:id
 exports.deleteMyReview = async (req, res) => {
   try {
     const userId = req.headers["x-user-id"];
@@ -75,7 +74,6 @@ exports.deleteMyReview = async (req, res) => {
 
     if (!userId) return res.status(401).json({ message: "Missing x-user-id" });
 
-    // Если хочешь строго только волонтёру — оставь проверку
     if (userRole && userRole !== "volunteer") {
       return res.status(403).json({ message: "Forbidden" });
     }
@@ -113,7 +111,7 @@ exports.deleteMyReview = async (req, res) => {
   }
 };
 
-// ✅ PUT /reviews/:id  (Редактировать мой отзыв)
+// PUT /reviews/:id
 exports.updateMyReview = async (req, res) => {
   try {
     const userId = req.headers["x-user-id"];
@@ -170,7 +168,7 @@ exports.updateMyReview = async (req, res) => {
   }
 };
 
-// ✅ GET /reviews/:projectId
+// GET /reviews/:projectId
 exports.getReviewsByProject = async (req, res) => {
   try {
     const projectId = parseProjectId(req.params.projectId);
@@ -181,7 +179,7 @@ exports.getReviewsByProject = async (req, res) => {
       orderBy: { createdAt: "desc" },
     });
 
-    // ✅ Подтягиваем имя автора (User.id — Int, Review.authorId — String)
+    // authorId в review хранится строкой
     const authorIds = Array.from(
       new Set(
         reviews
@@ -214,7 +212,7 @@ exports.getReviewsByProject = async (req, res) => {
   }
 };
 
-// ✅ POST /reviews/:projectId
+// POST /reviews/:projectId
 exports.createReview = async (req, res) => {
   try {
     const userId = req.headers["x-user-id"];
@@ -245,7 +243,7 @@ exports.createReview = async (req, res) => {
       return res.status(400).json({ message: "Некорректный userId" });
     }
 
-    // Проверка участия в applications-service
+    // Проверяем одобренную заявку
     const checkUrl = `${APPLICATIONS_SERVICE_URL}/internal/check-approved?userId=${userIdInt}&projectId=${projectId}`;
     const checkRes = await fetch(checkUrl);
 

@@ -148,7 +148,6 @@
   color: #7f8c8d;
 }
 
-/* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
   .my-applications {
     padding: 1rem;

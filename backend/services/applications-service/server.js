@@ -16,7 +16,7 @@ const reviewEligibilityRoutes = require("./routes/reviewEligibility.routes");
 try {
   require("dotenv").config({ path: path.join(__dirname, "..", "..", ".env") });
 } catch (error) {
-  // dotenv is optional when env vars are injected by container runtime
+  // Локально читаем .env
 }
 
 const app = express();
@@ -25,7 +25,7 @@ const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-// CORS для HTTP
+// CORS
 app.use(
   cors({
     origin: corsOrigins,
@@ -34,19 +34,19 @@ app.use(
 );
 app.use(express.json());
 
-// HTTP routes
+// Роуты
 app.use("/messages", messagesRoutes);
 app.use("/", applicationsRoutes);
 app.use("/internal", internalRoutes);
 app.use("/", reviewEligibilityRoutes);
 
-// --- создаём HTTP server, чтобы Socket.IO работал на том же порту ---
+// HTTP-сервер для Socket.IO
 const server = http.createServer(app);
 
-// JWT secret (ДОЛЖЕН совпадать с auth-service/gateway)
+// JWT для сокетов
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
 
-// Socket.IO сервер
+// Socket.IO
 const io = new Server(server, {
   cors: {
     origin: corsOrigins,
@@ -54,10 +54,7 @@ const io = new Server(server, {
   },
 });
 
-/**
- * ✅ Утилита: пересчитать общее кол-во непрочитанных и отправить пользователю.
- * Navbar слушает событие `unread:count` и мгновенно убирает/ставит кружок.
- */
+// Считаем общее число непрочитанных
 async function emitUnreadCount(userId) {
   try {
     const total = await prisma.message.count({
@@ -69,7 +66,7 @@ async function emitUnreadCount(userId) {
   }
 }
 
-// WS JWT-auth
+// Проверка токена сокета
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth?.token;
@@ -77,7 +74,6 @@ io.use((socket, next) => {
 
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // ожидаем userId и role в токене
     socket.user = {
       userId: Number(decoded.userId),
       role: decoded.role ? String(decoded.role).toLowerCase() : "unknown",
@@ -92,14 +88,14 @@ io.use((socket, next) => {
 io.on("connection", (socket) => {
   const userId = socket.user.userId;
 
-  // личная комната пользователя
+  // Комната пользователя
   socket.join(`user:${userId}`);
   console.log(`[WS] connected user:${userId}`);
 
-  // При коннекте сразу отдадим актуальный total unread (чтобы Navbar синхронизировался)
+  // Сразу отправляем unread count
   emitUnreadCount(userId);
 
-  // ✅ при подключении пользователя — отмечаем все недоставленные как доставленные
+  // Отмечаем доставленные сообщения
   (async () => {
     try {
       const undelivered = await prisma.message.findMany({
@@ -116,7 +112,7 @@ io.on("connection", (socket) => {
         data: { deliveredAt: now },
       });
 
-      // уведомим отправителей
+      // Сообщаем отправителям
       for (const m of undelivered) {
         io.to(`user:${m.senderId}`).emit("message:delivered", {
           messageId: m.id,
@@ -128,16 +124,10 @@ io.on("connection", (socket) => {
     }
   })();
 
-  /**
-   * ✅ Отметить диалог как прочитанный (readAt).
-   * payload: { partnerId: number }
-   * - Ставит readAt у всех сообщений partner -> me, где readAt == null
-   * - Отправляет partner событие `messages:read` (для ✓✓ у отправителя)
-   * - Отправляет me событие `unread:count` (для мгновенного обновления кружка в Navbar)
-   */
+  // Отмечаем диалог прочитанным
   socket.on("conversation:read", async (payload) => {
     try {
-      const readerId = userId; // кто читает
+      const readerId = userId;
       const partnerId = Number(payload?.partnerId);
       if (!partnerId) return;
 
@@ -153,7 +143,7 @@ io.on("connection", (socket) => {
       });
 
       if (!toRead.length) {
-        // даже если нечего читать — всё равно синхронизируем Navbar
+        // Обновляем счётчик даже без новых сообщений
         await emitUnreadCount(readerId);
         return;
       }
@@ -165,24 +155,21 @@ io.on("connection", (socket) => {
         data: { readAt: now },
       });
 
-      // уведомляем отправителя (партнёра), чтобы у него стало ✓✓
+      // Сообщаем отправителю
       io.to(`user:${partnerId}`).emit("messages:read", {
         messageIds: ids,
         readAt: now.toISOString(),
         readerId,
       });
 
-      // уведомляем читателя, чтобы мгновенно убрать кружок
+      // Обновляем счётчик читателя
       await emitUnreadCount(readerId);
     } catch (e) {
       console.error("[WS] conversation:read error", e);
     }
   });
 
-  /**
-   * Отправка сообщения в real-time
-   * payload: { receiverId: number, text: string }
-   */
+  // Отправка сообщения
   socket.on("message:send", async (payload) => {
     try {
       const senderId = userId;
@@ -198,7 +185,7 @@ io.on("connection", (socket) => {
         return;
       }
 
-      // ✅ сохраняем в БД
+      // Сохраняем сообщение
       const msg = await prisma.message.create({
         data: {
           senderId,
@@ -207,16 +194,16 @@ io.on("connection", (socket) => {
         },
       });
 
-      // ✅ как в твоём HTTP: добавляем senderRole
+      // Добавляем роль отправителя
       const dto = { ...msg, senderRole };
 
-      // получателю
+      // Получателю
       io.to(`user:${receiverId}`).emit("message:new", dto);
 
-      // отправителю подтверждение
+      // Подтверждение отправителю
       socket.emit("message:sent", dto);
 
-      // ✅ мгновенно обновим кружок у получателя (без лишнего GET /conversations)
+      // Обновляем счётчик получателя
       await emitUnreadCount(receiverId);
     } catch (err) {
       console.error("[WS] message:send error", err);
@@ -229,7 +216,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// слушаем тот же порт
 const PORT = Number(process.env.PORT) || 5003;
 
 server.listen(PORT, () => {

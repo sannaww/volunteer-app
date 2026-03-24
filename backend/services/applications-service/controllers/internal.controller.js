@@ -21,8 +21,8 @@ exports.checkApproved = async (req, res) => {
 
     const exists = await prisma.application.findFirst({
       where: {
-        userId,      // ✅ Int
-        projectId,   // ✅ Int
+        userId,
+        projectId,
         status: "APPROVED",
       },
       select: { id: true },

@@ -23,7 +23,7 @@ app.use('/api/admin', createProxyMiddleware({
   changeOrigin: true
 }));
 
-//Чат (пока) живёт внутри applications-service
+// Чат в applications-service
 app.use('/api/messages', createProxyMiddleware({
   target: 'http://localhost:5003',
   changeOrigin: true,
@@ -31,5 +31,5 @@ app.use('/api/messages', createProxyMiddleware({
 }));
 
 app.listen(5000, () => {
-  console.log('🚀 API Gateway running on port 5000');
+  console.log('API Gateway running on port 5000');
 });

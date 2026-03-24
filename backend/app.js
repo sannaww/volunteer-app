@@ -15,7 +15,7 @@ const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-// Global middleware
+// CORS
 app.use(
   cors({
     origin: corsOrigins,
@@ -23,15 +23,14 @@ app.use(
   })
 );
 
-// ВАЖНО: НЕ включаем парсинг body в gateway, иначе proxy может "съесть" тело
+// Без express.json() proxy может потерять body
 // app.use(express.json());
 
-// Health check
 app.get("/api/health", (req, res) => {
   res.json({ status: "API is working 🚀" });
 });
 
-// Auth middleware
+// JWT
 function attachAuth(req, res, next) {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "Требуется авторизация" });
@@ -41,7 +40,7 @@ function attachAuth(req, res, next) {
 
     req.user = decoded;
 
-    // пробрасываем данные дальше
+    // Пробрасываем пользователя дальше
     req.headers["x-user-id"] = String(decoded.userId);
     if (decoded.role) req.headers["x-user-role"] = String(decoded.role);
 
@@ -62,12 +61,12 @@ function requireRole(allowedRoles = []) {
   };
 }
 
-//helper: считаем write-методами POST/PUT/PATCH/DELETE
+// Методы с записью
 function isWriteMethod(method) {
   return ["POST", "PUT", "PATCH", "DELETE"].includes(method);
 }
 
-//REVIEWS
+// Отзывы
 app.use(
   "/api/reviews",
   attachAuth,
@@ -76,7 +75,7 @@ app.use(
     target: PROJECTS_SERVICE_URL,
     changeOrigin: true,
 
-    //всегда проксируем полный путь
+    // Оставляем исходный путь
     pathRewrite: (path, req) => req.originalUrl,
 
     onProxyReq: (proxyReq, req) => {
@@ -85,7 +84,7 @@ app.use(
   })
 );
 
-//Proxy → Auth Service (5001)
+// Auth service
 app.use(
   "/api/auth",
   createProxyMiddleware({
@@ -95,7 +94,7 @@ app.use(
   })
 );
 
-//Proxy → Profile (Auth Service 5001)
+// Профиль
 app.use(
   "/api/profile",
   attachAuth,
@@ -109,7 +108,7 @@ app.use(
   })
 );
 
-// Proxy → Projects Service (5002) + RBAC
+// Projects service
 app.use(
   "/api/projects",
   (req, res, next) => {
@@ -121,24 +120,22 @@ app.use(
 
     if (req.path.startsWith("/organizer")) return attachAuth(req, res, next);
 
-    // favorites: всегда с токеном
+    // Избранное всегда с токеном
     if (isFavoritesRoute) return attachAuth(req, res, next);
 
-    //reviews:
-    // - GET /reviews/:projectId публично (без токена)
-    // - НО /reviews/my требует токен (иначе Missing x-user-id)
+    // /reviews/my требует токен
     const isReviewsMy = req.path === "/reviews/my";
     if (isReviewsMy) return attachAuth(req, res, next);
 
-    // reviews: POST/PUT/DELETE — только с токеном
+    // Запись отзывов только с токеном
     if (isReviewsRoute && ["POST", "PUT", "DELETE"].includes(req.method)) {
       return attachAuth(req, res, next);
     }
 
-    // обычные GET — без токена
+    // Обычные GET без токена
     if (!isWriteMethod(req.method)) return next();
 
-    // write проекты — с токеном
+    // Изменение проектов только с токеном
     return attachAuth(req, res, next);
   },
   (req, res, next) => {
@@ -153,16 +150,14 @@ app.use(
 
     if (isFavoritesRoute) return requireRole(["volunteer", "admin"])(req, res, next);
 
-    //reviews:
     const isReviewsMy = req.path === "/reviews/my";
     if (isReviewsMy) return requireRole(["volunteer", "admin"])(req, res, next);
 
-    // PUT/DELETE отзыва - только volunteer/admin
+    // Изменение отзывов
     if (isReviewsRoute && ["PUT", "DELETE"].includes(req.method)) {
       return requireRole(["volunteer", "admin"])(req, res, next);
     }
 
-    // POST отзыва - только volunteer/admin
     if (isReviewsRoute && req.method === "POST") {
       return requireRole(["volunteer", "admin"])(req, res, next);
     }
@@ -178,7 +173,7 @@ app.use(
   })
 );
 
-// Proxy → Applications Service (5003) + RBAC
+// Applications service
 app.use(
   "/api/applications",
   attachAuth,
@@ -203,7 +198,7 @@ app.use(
   })
 );
 
-// Proxy → Admin Service (5004) + RBAC
+// Admin service
 app.use(
   "/api/admin",
   attachAuth,
@@ -215,7 +210,7 @@ app.use(
   })
 );
 
-// Proxy → Messages
+// Сообщения
 app.use(
   "/api/messages",
   attachAuth,
@@ -226,7 +221,7 @@ app.use(
   })
 );
 
-//Proxy → Socket.IO (applications-service 5003)
+// Socket.IO
 const socketIoProxy = createProxyMiddleware({
   target: APPLICATIONS_SERVICE_URL,
   changeOrigin: true,

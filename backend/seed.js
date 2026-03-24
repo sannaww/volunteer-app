@@ -6,14 +6,14 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Начинаем создание тестовых данных...');
 
-  // Очищаем существующие данные (начинаем с чистого листа)
+  // Очищаем данные
   await prisma.application.deleteMany();
   await prisma.project.deleteMany();
   await prisma.user.deleteMany();
 
-  console.log('✅ Старые данные очищены');
+  console.log('Старые данные очищены');
 
-  // Создаем тестового организатора
+  // Организатор
   const organizer = await prisma.user.create({
     data: {
       email: 'organizer@example.com',
@@ -26,9 +26,9 @@ async function main() {
     },
   });
 
-  console.log('✅ Организатор создан:', organizer.email);
+  console.log('Организатор создан:', organizer.email);
 
-  // Создаем тестового волонтера
+  // Волонтер
   const volunteer = await prisma.user.create({
     data: {
       email: 'volunteer@example.com',
@@ -41,11 +41,11 @@ async function main() {
     },
   });
 
-  console.log('✅ Волонтер создан:', volunteer.email);
+  console.log('Волонтер создан:', volunteer.email);
 
-  // Создаем разнообразные тестовые проекты
+  // Проекты
   const projects = await Promise.all([
-    // Экологический проект
+    // Экология
     prisma.project.create({
       data: {
         title: 'Уборка городского парка',
@@ -60,7 +60,7 @@ async function main() {
         createdBy: organizer.id,
       },
     }),
-    // Защита животных
+    // Животные
     prisma.project.create({
       data: {
         title: 'Помощь бездомным животным',
@@ -75,7 +75,7 @@ async function main() {
         createdBy: organizer.id,
       },
     }),
-    // Образовательный проект
+    // Образование
     prisma.project.create({
       data: {
         title: 'Обучение пожилых людей компьютерной грамотности',
@@ -105,7 +105,7 @@ async function main() {
         createdBy: organizer.id,
       },
     }),
-    // Культурный проект
+    // Культура
     prisma.project.create({
       data: {
         title: 'Организация выставки местных художников',
@@ -120,7 +120,7 @@ async function main() {
         createdBy: organizer.id,
       },
     }),
-    // Спортивный проект
+    // Спорт
     prisma.project.create({
       data: {
         title: 'Поддержка городского марафона',
@@ -137,12 +137,12 @@ async function main() {
     }),
   ]);
 
-  console.log('✅ Проекты созданы:');
+  console.log('Проекты созданы:');
 projects.forEach(project => {
   console.log(`   - ${project.title} (${project.projectType})`);
 });
 
-console.log('🎉 Все тестовые данные созданы успешно!');
+console.log('Тестовые данные созданы.');
 console.log('\nДанные для входа (email уже подтверждены):');
 console.log('Организатор: organizer@example.com / password123');
 console.log('Волонтер: volunteer@example.com / password123');
@@ -150,7 +150,7 @@ console.log('Волонтер: volunteer@example.com / password123');
 
 main()
   .catch((e) => {
-    console.error('❌ Ошибка при создании тестовых данных:', e);
+    console.error('Ошибка при создании тестовых данных:', e);
     process.exit(1);
   })
   .finally(async () => {

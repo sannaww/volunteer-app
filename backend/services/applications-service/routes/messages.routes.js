@@ -3,13 +3,13 @@ const router = express.Router();
 const prisma = require('../prismaClient');
 const axios = require('axios');
 const GATEWAY_URL = process.env.GATEWAY_URL || "http://localhost:5000";
-// --- helpers ---
+
 function normalizeRole(role) {
   if (!role) return 'unknown';
   return String(role).toLowerCase();
 }
-// Простейший in-memory cache пользователей (дипломно: снижает нагрузку)
-// key: userId -> { value, expiresAt }
+
+// Кэш пользователей
 const userCache = new Map();
 const USER_CACHE_TTL_MS = 5 * 60 * 1000; // 5 минут
 async function getUserPublicById(userId, token) {
@@ -18,9 +18,7 @@ async function getUserPublicById(userId, token) {
   if (cached && cached.expiresAt > now) {
     return cached.value;
   }
-  // Важно: мы обращаемся к auth-service через gateway,
-  // чтобы сохранить единые правила и не знать портов напрямую.
-  // Gateway ждёт /api/auth/users/:id
+  // Данные пользователя берём через gateway
   const resp = await axios.get(`${GATEWAY_URL}/api/auth/users/${userId}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
@@ -34,18 +32,18 @@ function safeUserFallback(userId) {
 function getBearerToken(req) {
   return req.headers.authorization?.split(' ')[1] || null;
 }
-// --- routes ---
+
 // GET /messages/conversations
 router.get('/conversations', async (req, res) => {
   const userId = Number(req.headers['x-user-id']);
   if (!userId) return res.status(401).json({ message: 'No x-user-id header' });
-  const token = getBearerToken(req); // прокинутый gateway токен
+  const token = getBearerToken(req);
   const lastMessages = await prisma.message.findMany({
     where: { OR: [{ senderId: userId }, { receiverId: userId }] },
     orderBy: { createdAt: 'desc' },
     take: 200,
   });
-  // partnerId -> conversation skeleton
+  // Заготовка диалога
   const map = new Map();
   for (const m of lastMessages) {
     const partnerId = m.senderId === userId ? m.receiverId : m.senderId;
@@ -66,7 +64,7 @@ router.get('/conversations', async (req, res) => {
     }
   }
   const partnerIds = Array.from(map.keys());
-    // ✅ считаем непрочитанные: сообщения -> МНЕ (receiverId=userId), ещё не прочитаны (readAt=null)
+  // Считаем непрочитанные
   const unreadGrouped = await prisma.message.groupBy({
     by: ["senderId"],
     where: {
@@ -79,18 +77,18 @@ router.get('/conversations', async (req, res) => {
   const unreadByPartner = new Map(
     unreadGrouped.map((row) => [row.senderId, row._count._all])
   );
-  // проставим в map
+  // Заполняем unreadCount
   for (const pid of partnerIds) {
     const conv = map.get(pid);
     if (conv) conv.unreadCount = unreadByPartner.get(pid) || 0;
   }
-  // подтягиваем пользователей параллельно
+  // Подтягиваем пользователей
   const users = await Promise.all(
     partnerIds.map(async (pid) => {
       try {
         return await getUserPublicById(pid, token);
       } catch (e) {
-        // auth-service может быть недоступен — чат всё равно работает
+        // Если auth-service недоступен, чат всё равно работает
         return safeUserFallback(pid);
       }
     })
@@ -126,8 +124,9 @@ router.get('/conversation/:partnerId', async (req, res) => {
     orderBy: { createdAt: 'asc' },
   });
   res.json(msgs);
-});// GET /messages/conversation/:partnerId/search?q=...&limit=20&cursor=123
-// Поиск по истории сообщений в рамках конкретного диалога
+});
+
+// GET /messages/conversation/:partnerId/search?q=...&limit=20&cursor=123
 router.get("/conversation/:partnerId/search", async (req, res) => {
   try {
     const userId = Number(req.headers["x-user-id"]);
@@ -184,7 +183,6 @@ router.get("/conversation/:partnerId/search", async (req, res) => {
 });
 
 // GET /messages/conversation/:partnerId/around/:messageId?before=30&after=30
-// Возвращает кусок истории вокруг конкретного сообщения (jump-to-message)
 router.get("/conversation/:partnerId/around/:messageId", async (req, res) => {
   try {
     const userId = Number(req.headers["x-user-id"]);
@@ -251,7 +249,6 @@ router.post('/', async (req, res) => {
   res.status(201).json({ ...msg, senderRole });
 });
 // DELETE /messages/conversation/:partnerId
-// Удаляет весь диалог (все сообщения между userId и partnerId)
 router.delete("/conversation/:partnerId", async (req, res) => {
   try {
     const userId = Number(req.headers["x-user-id"]);

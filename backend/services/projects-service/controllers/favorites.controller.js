@@ -1,15 +1,11 @@
 const prisma = require("../prismaClient");
 
-// POST /favorites/:projectId
-// helper: приводим id проекта к нужному типу
+// Приводим projectId
 function normalizeProjectId(projectIdParam) {
-  // Если у тебя Project.id = Int, то нужно число:
-  // "1" -> 1
-  // Если у тебя Project.id = String (uuid/cuid), то оставь как есть
   const asNumber = Number(projectIdParam);
   if (!Number.isNaN(asNumber) && projectIdParam !== "") return asNumber;
 
-  return projectIdParam; // fallback для String id
+  return projectIdParam;
 }
 
 exports.addFavorite = async (req, res) => {
@@ -22,7 +18,7 @@ exports.addFavorite = async (req, res) => {
 
     const projectId = normalizeProjectId(projectIdRaw);
 
-    // 1) Проверим, что проект существует (иначе будет ошибка FK)
+    // Проверяем проект
     const project = await prisma.project.findUnique({
       where: { id: projectId },
     });
@@ -31,9 +27,7 @@ exports.addFavorite = async (req, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // 2) Создаём избранное (если уже есть — вернём 200)
-    // Важно: имя композитного ключа должно совпадать с тем,
-    // что Prisma сгенерировала из @@unique([userId, projectId])
+    // Ищем существующую запись
     const existing = await prisma.favorite.findUnique({
       where: {
         userId_projectId: { userId: String(userId), projectId },
@@ -54,14 +48,14 @@ exports.addFavorite = async (req, res) => {
   } catch (err) {
     console.error("addFavorite error:", err);
 
-    // частые понятные случаи Prisma
+    // Ошибки Prisma
     if (err.code === "P2002") {
       return res.status(409).json({ message: "Already in favorites" });
     }
 
     return res.status(500).json({
       message: "Server error",
-      details: err.message, // чтобы видеть причину прямо в Postman
+      details: err.message,
     });
   }
 };
@@ -90,7 +84,7 @@ exports.removeFavorite = async (req, res) => {
   } catch (err) {
     console.error("removeFavorite error:", err);
 
-    // Prisma: запись для удаления не найдена
+    // Запись не найдена
     if (err.code === "P2025") {
       return res.status(404).json({ message: "Favorite not found" });
     }
@@ -101,8 +95,6 @@ exports.removeFavorite = async (req, res) => {
     });
   }
 };
-
-
 // GET /favorites
 exports.getMyFavorites = async (req, res) => {
   try {
