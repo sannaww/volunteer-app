@@ -141,6 +141,37 @@ function fitFontSize(ctx, text, maxWidth, preferredSize, minSize, fontFamily, fo
   return minSize;
 }
 
+function fitWrappedFontSize(ctx, text, maxWidth, maxHeight, preferredSize, minSize, fontFamily, options = {}) {
+  const {
+    fontWeight = 700,
+    maxLines = Number.POSITIVE_INFINITY,
+    lineHeightMultiplier = 1.2,
+  } = options;
+  let fontSize = preferredSize;
+
+  while (fontSize > minSize) {
+    ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+    const lines = getWrappedLines(ctx, text, maxWidth, maxLines);
+    const lineHeight = Math.round(fontSize * lineHeightMultiplier);
+    const textBlockHeight = lines.length * lineHeight;
+    const widestLine = Math.max(...lines.map((line) => ctx.measureText(line).width));
+
+    if (widestLine <= maxWidth && textBlockHeight <= maxHeight) {
+      return { fontSize, lineHeight, lines };
+    }
+
+    fontSize -= 1;
+  }
+
+  ctx.font = `${fontWeight} ${minSize}px ${fontFamily}`;
+
+  return {
+    fontSize: minSize,
+    lineHeight: Math.round(minSize * lineHeightMultiplier),
+    lines: getWrappedLines(ctx, text, maxWidth, maxLines),
+  };
+}
+
 function drawBackground(ctx, width, height) {
   const baseGradient = ctx.createLinearGradient(0, 0, width, height);
   baseGradient.addColorStop(0, PALETTE.paperWarm);
@@ -179,13 +210,40 @@ function drawFrame(ctx, width, height) {
   strokeRoundedRect(ctx, 34, 34, width - 68, height - 68, 30, PALETTE.lineStrong, 4);
   strokeRoundedRect(ctx, 58, 58, width - 116, height - 116, 24, "rgba(70, 109, 157, 0.16)", 2);
 
-  fillRoundedRect(ctx, 112, 92, 280, 54, 27, "rgba(70, 109, 157, 0.12)");
+  const badgeX = 96;
+  const badgeY = 88;
+  const badgeWidth = 356;
+  const badgeHeight = 78;
+  const badgePaddingX = 28;
+  const badgePaddingY = 14;
+  const badgeTextLayout = fitWrappedFontSize(
+    ctx,
+    "Волонтерская платформа",
+    badgeWidth - badgePaddingX * 2,
+    badgeHeight - badgePaddingY * 2,
+    24,
+    17,
+    '"Manrope", "Segoe UI", sans-serif',
+    {
+      fontWeight: 800,
+      maxLines: 2,
+      lineHeightMultiplier: 1.12,
+    }
+  );
+
+  fillRoundedRect(ctx, badgeX, badgeY, badgeWidth, badgeHeight, badgeHeight / 2, "rgba(70, 109, 157, 0.12)");
+  strokeRoundedRect(ctx, badgeX, badgeY, badgeWidth, badgeHeight, badgeHeight / 2, "rgba(39, 74, 115, 0.08)", 1.5);
   ctx.save();
   ctx.fillStyle = PALETTE.primaryStrong;
-  ctx.font = '800 24px "Manrope", "Segoe UI", sans-serif';
+  ctx.font = `800 ${badgeTextLayout.fontSize}px "Manrope", "Segoe UI", sans-serif`;
   ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("Волонтерская платформа", 252, 119);
+  ctx.textBaseline = "top";
+
+  const badgeTextHeight = badgeTextLayout.lines.length * badgeTextLayout.lineHeight;
+  const badgeTextY = badgeY + (badgeHeight - badgeTextHeight) / 2;
+  badgeTextLayout.lines.forEach((line, index) => {
+    ctx.fillText(line, badgeX + badgeWidth / 2, badgeTextY + index * badgeTextLayout.lineHeight);
+  });
   ctx.restore();
 }
 
@@ -288,16 +346,29 @@ function drawCertificateCanvas({ participantName, projectTitle, dateLabel, locat
   ctx.font = '700 20px "Manrope", "Segoe UI", sans-serif';
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  ctx.fillText("Название проекта", canvas.width / 2, projectPanelY + 24);
+  ctx.fillText("Название проекта", canvas.width / 2, projectPanelY + 22);
 
   ctx.fillStyle = PALETTE.ink;
-  ctx.font = '700 38px "Manrope", "Segoe UI", sans-serif';
-  const projectLines = getWrappedLines(ctx, projectTitle, projectPanelWidth - 90, 3);
-  const projectLineHeight = 46;
-  const projectTextBlockHeight = projectLines.length * projectLineHeight;
-  const projectTextY = projectPanelY + 76 + (58 - projectTextBlockHeight / 2);
-  projectLines.forEach((line, index) => {
-    ctx.fillText(line, canvas.width / 2, projectTextY + index * projectLineHeight);
+  const projectTitleLayout = fitWrappedFontSize(
+    ctx,
+    projectTitle,
+    projectPanelWidth - 110,
+    86,
+    38,
+    24,
+    '"Manrope", "Segoe UI", sans-serif',
+    {
+      fontWeight: 700,
+      maxLines: 3,
+      lineHeightMultiplier: 1.14,
+    }
+  );
+  ctx.font = `700 ${projectTitleLayout.fontSize}px "Manrope", "Segoe UI", sans-serif`;
+  const projectTextBlockHeight = projectTitleLayout.lines.length * projectTitleLayout.lineHeight;
+  const projectTextAreaY = projectPanelY + 56;
+  const projectTextY = projectTextAreaY + Math.max(0, (86 - projectTextBlockHeight) / 2);
+  projectTitleLayout.lines.forEach((line, index) => {
+    ctx.fillText(line, canvas.width / 2, projectTextY + index * projectTitleLayout.lineHeight);
   });
   ctx.restore();
 
