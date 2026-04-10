@@ -7,6 +7,7 @@ import {
   getProfileActiveTab,
   setProfileActiveTab,
 } from "../utils/authSession";
+import { generateCertificatePdf } from "../utils/certificates";
 import { formatDate, formatPhoneDisplay } from "../utils/formatters";
 import { getRoleLabel } from "../utils/presentation";
 import AdminPanel from "./AdminPanel";
@@ -256,10 +257,20 @@ function Profile({ user, onUserUpdate }) {
     }
   };
 
-  const generateCertificate = (participation) => {
+  const generateCertificate = async (participation) => {
     if (!profile) {
       error("Не удалось создать сертификат: профиль ещё не загружен.");
       return;
+    }
+
+    try {
+      await generateCertificatePdf(profile, participation, {
+        siteName: "Помогаем вместе",
+        siteUrl: window.location.origin,
+      });
+      return;
+    } catch (generationError) {
+      console.error("Ошибка формирования PDF-сертификата:", generationError);
     }
 
     const certificateText = [

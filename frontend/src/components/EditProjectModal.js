@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import api from "../api/client";
 import { validateContactInfo } from "../utils/contactInfo";
@@ -131,7 +132,7 @@ function EditProjectModal({ project, onClose, onUpdated, onSave, onCancel }) {
 
   if (!project) return null;
 
-  return (
+  const modalMarkup = (
     <div className="modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && handleClose?.()}>
       <div className="modal-content" onMouseDown={(event) => event.stopPropagation()}>
         <div className="modal-header">
@@ -261,6 +262,8 @@ function EditProjectModal({ project, onClose, onUpdated, onSave, onCancel }) {
       </div>
     </div>
   );
+
+  return createPortal(modalMarkup, document.body);
 }
 
 export default EditProjectModal;
