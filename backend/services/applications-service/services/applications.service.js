@@ -54,19 +54,22 @@ exports.getProjectApplications = async ({ projectId, requesterId, requesterRole 
   }
 
   const apps = await prisma.application.findMany({
-  where: { projectId },
-  include: {
-    user: {
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        role: true,
+    where: { projectId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+        },
       },
     },
-  },
-});
-return apps;
+    orderBy: { createdAt: "desc" },
+  });
+
+  return apps;
 };
 
 // Отмена заявки

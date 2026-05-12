@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import api from "../api/client";
 import { createSocket } from "../api/socket";
@@ -9,11 +9,18 @@ import "./Navbar.css";
 function Navbar({ user, onLogout }) {
   const [totalUnread, setTotalUnread] = useState(0);
   const socketRef = useRef(null);
+  const navigate = useNavigate();
   const greetingName =
     user?.firstName?.trim() ||
     user?.lastName?.trim() ||
     user?.email?.split("@")?.[0] ||
     "пользователь";
+
+  const handleLogoutClick = () => {
+    onLogout?.();
+    setTotalUnread(0);
+    navigate("/", { replace: true });
+  };
 
   const fetchTotalUnread = async () => {
     if (!user) {
@@ -154,7 +161,7 @@ function Navbar({ user, onLogout }) {
                 ) : null}
               </Link>
 
-              <button onClick={onLogout} className="logout-btn" type="button">
+              <button onClick={handleLogoutClick} className="logout-btn" type="button">
                 <Icon name="logout" />
                 <span>Выйти</span>
               </button>
